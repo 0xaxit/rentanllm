@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" width="640" height="240">
+  <!-- Owner: a plan resting at night. Crescent moon over a sleeping laptop. Grayscale, dithered at runtime. -->
+  <defs>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.5">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="moon" cx="0.35" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#9a9a9a"/>
+    </radialGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a5a5a"/>
+      <stop offset="1" stop-color="#1c1c1c"/>
+    </linearGradient>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cfcfcf"/>
+      <stop offset="1" stop-color="#6a6a6a"/>
+    </linearGradient>
+    <mask id="crescent">
+      <rect width="640" height="240" fill="#fff"/>
+      <circle cx="452" cy="58" r="44" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="640" height="240" fill="#000"/>
+  <circle cx="430" cy="78" r="110" fill="url(#glow)"/>
+  <circle cx="430" cy="78" r="50" fill="url(#moon)" mask="url(#crescent)"/>
+  <circle cx="120" cy="40" r="3" fill="#ddd"/><circle cx="210" cy="70" r="2" fill="#bbb"/>
+  <circle cx="560" cy="150" r="3" fill="#ccc"/><circle cx="300" cy="30" r="2" fill="#aaa"/>
+  <circle cx="580" cy="40" r="2" fill="#bbb"/>
+  <rect x="190" y="112" width="200" height="104" rx="6" fill="url(#base)"/>
+  <rect x="202" y="124" width="176" height="84" fill="url(#screen)"/>
+  <path d="M150 216 H430 L410 232 H170 Z" fill="url(#base)"/>
+  <text x="240" y="180" font-family="monospace" font-size="34" fill="#9a9a9a">z</text>
+  <text x="272" y="162" font-family="monospace" font-size="26" fill="#7a7a7a">z</text>
+  <text x="296" y="148" font-family="monospace" font-size="18" fill="#5a5a5a">z</text>
+</svg>

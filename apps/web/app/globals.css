@@ -1,0 +1,359 @@
+@import "tailwindcss";
+
+/*
+ * RentAnLLM design system, after departuremono.com.
+ * One typeface (Departure Mono), a grey ramp, one accent (amber).
+ */
+@theme {
+  --font-mono: var(--font-departure), ui-monospace, monospace;
+  --font-sans: var(--font-departure), ui-monospace, monospace;
+
+  /* palette */
+  --color-enamel: #eeeeee;
+  --color-aluminum: #cccccc;
+  --color-cement: #c0c0c0;
+  --color-ash: #8e8e8e;
+  --color-mud: #8a8a6f;
+  --color-clay: #6c6c58;
+  --color-dark: #444444;
+  --color-soot: #333333;
+  --color-carbon: #222222;
+  --color-pit: #1a1a1a;
+  --color-black: #141414;
+  --color-amber: #ffa133;
+  --color-pumpkin: #e47b1a;
+  --color-flux: #c8be50;
+  --color-foam: #bccabb;
+  /* node status dots: online / offline */
+  --color-live: #3ecf6e;
+  --color-down: #e5484d;
+
+  /* secondary greys and bands lifted from the artboards */
+  --color-gone: #666666;
+  --color-ember: #7a4a17;
+  --color-band-under: #2b2b2b;
+  --color-band-pricey: #3a3a30;
+  --color-band-above: #4a2f17;
+  --color-paper: #f3f3f0;
+  --color-paper-shade: #e6e6e1;
+
+  /* type steps: 11 / 16.5 / 22 / 33 / 44 / 66 / 88 */
+  --text-label: 11px;
+  --text-label--line-height: 11px;
+  --text-note: 13px;
+  --text-note--line-height: 17px;
+  --text-body: 16.5px;
+  --text-body--line-height: 21px;
+  --text-title: 22px;
+  --text-title--line-height: 26px;
+  --text-h3: 33px;
+  --text-h3--line-height: 33px;
+  --text-h2: 44px;
+  --text-h2--line-height: 44px;
+  --text-h1: 66px;
+  --text-h1--line-height: 66px;
+  --text-display: 88px;
+  --text-display--line-height: 88px;
+
+  /* fluid versions of the big steps. Phones get the 44 / 33 steps (the block
+     headings wrap per word there), desktops grow to 66 / 44. */
+  --text-hero: clamp(44px, 5vw, 66px);
+  --text-hero--line-height: 1.09;
+  --text-heading: clamp(33px, 3.4vw, 44px);
+  --text-heading--line-height: 1.09;
+  --text-pass: clamp(36px, 9vw, 66px);
+  --text-pass--line-height: 1;
+  --text-earnings: clamp(56px, 14vw, 88px);
+  --text-earnings--line-height: 1;
+  --text-wordmark: clamp(44px, 13vw, 190px);
+  --text-wordmark--line-height: 1;
+
+  --tracking-label: 0.08em;
+  --tracking-display: -0.02em;
+  --tracking-wordmark: -0.04em;
+
+  --shadow-slip: 0 24px 60px -20px rgb(0 0 0 / 0.6);
+
+  --ease-spring: cubic-bezier(0.36, 2.09, 0.07, -1.52);
+
+  --animate-blink: blink 1.06s steps(1, end) infinite;
+  --animate-toast-in: toast-in 0.45s var(--ease-spring) both;
+  --animate-sheet-up: sheet-up 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade-in: fade-in 0.2s ease-out both;
+
+  /* mobile app shell */
+  --spacing-tabbar: 56px;
+  --spacing-touch: 44px;
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      /* drops in from the top on phones, rises from the bottom on desktop */
+      transform: translateY(var(--toast-from, -12px));
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes blink {
+    0%,
+    50% {
+      opacity: 1;
+    }
+    50.01%,
+    100% {
+      opacity: 0;
+    }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-carbon);
+    color: var(--color-enamel);
+    font-family: var(--font-mono);
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: var(--color-amber);
+    color: var(--color-carbon);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 2px;
+  }
+
+  input[type="number"] {
+    appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+}
+
+/* painted grounds that sit under the Paper shaders (and stand in without WebGL) */
+@utility bg-dusk {
+  background-image: linear-gradient(
+    180deg,
+    var(--color-enamel) 0%,
+    var(--color-ash) 55%,
+    var(--color-carbon) 100%
+  );
+}
+
+@utility bg-earnings {
+  background-image: radial-gradient(
+    ellipse 120% 140% at 0% 100%,
+    var(--color-amber) 0%,
+    var(--color-ember) 38%,
+    var(--color-carbon) 78%
+  );
+}
+
+@utility bg-receipt {
+  background-image: linear-gradient(
+    180deg,
+    var(--color-paper) 0%,
+    var(--color-paper-shade) 100%
+  );
+}
+
+@utility bg-barcode {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--color-carbon) 0 3px,
+    var(--color-enamel) 3px 5px,
+    var(--color-carbon) 5px 6px,
+    var(--color-enamel) 6px 10px,
+    var(--color-carbon) 10px 12px,
+    var(--color-enamel) 12px 13px,
+    var(--color-carbon) 13px 14px,
+    var(--color-enamel) 14px 17px
+  );
+}
+
+/* safe areas for the installed (standalone) app on notched phones */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Diagonal hatch for "no data yet" spans (uptime before tracking began). */
+@utility bg-hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--color-soot) 0 2px,
+    transparent 2px 6px
+  );
+}
+
+@utility pt-toast {
+  padding-top: calc(env(safe-area-inset-top) + 12px);
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility pb-sheet {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
+}
+
+/* exactly the fixed tab bar: for screens that fit one viewport (receipt) */
+@utility pb-tabbar {
+  padding-bottom: calc(var(--spacing-tabbar) + env(safe-area-inset-bottom));
+}
+
+/* room under the scroll content for the fixed tab bar */
+@utility pb-app {
+  padding-bottom: calc(
+    var(--spacing-tabbar) + env(safe-area-inset-bottom) + 32px
+  );
+}
+
+@utility px-safe {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+
+/* block headings: each line is a grey block, and when a line wraps on a
+   phone every wrapped row gets its own block */
+@utility block-line {
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* hold-to-confirm fill: grows over --hold-ms while pressed, snaps back on release */
+@utility hold-fill {
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease-out;
+}
+
+@utility hold-fill-active {
+  transform: scaleX(1);
+  transition: transform var(--hold-ms, 2000ms) linear;
+}
+
+@layer components {
+  /* springy hover nudge used on links and buttons */
+  .spring {
+    transition: transform 0.45s var(--ease-spring);
+  }
+
+  .spring:hover {
+    transform: translateY(-2px);
+  }
+
+  .spring:active {
+    transform: translateY(0);
+  }
+
+  /* cut-off sliders: the visible meter is drawn by siblings; the native range
+     sits on top (44px tall, the whole width is the touch target) so keyboard,
+     touch and screen-reader behaviour stay native. */
+  .cutoff-range {
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    margin: 0;
+    touch-action: pan-y;
+  }
+
+  .cutoff-range::-webkit-slider-runnable-track {
+    background: transparent;
+    height: 44px;
+  }
+
+  .cutoff-range::-moz-range-track {
+    background: transparent;
+    height: 44px;
+  }
+
+  .cutoff-range::-webkit-slider-thumb {
+    appearance: none;
+    background: var(--color-amber);
+    border: 0;
+    border-radius: 0;
+    height: 28px;
+    margin-top: 8px;
+    width: 14px;
+    transition: transform 0.45s var(--ease-spring);
+  }
+
+  .cutoff-range::-moz-range-thumb {
+    background: var(--color-amber);
+    border: 0;
+    border-radius: 0;
+    height: 28px;
+    width: 14px;
+  }
+
+  .cutoff-range:hover::-webkit-slider-thumb,
+  .cutoff-range:active::-webkit-slider-thumb {
+    transform: scaleY(1.15);
+  }
+
+  .cutoff-range:focus-visible {
+    outline: none;
+  }
+
+  .cutoff-range:focus-visible::-webkit-slider-thumb {
+    outline: 2px solid var(--color-enamel);
+    outline-offset: 2px;
+  }
+
+  .cutoff-range:focus-visible::-moz-range-thumb {
+    outline: 2px solid var(--color-enamel);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-blink {
+    animation: none;
+  }
+
+  .spring,
+  .spring:hover {
+    transform: none;
+    transition: none;
+  }
+
+  .animate-toast-in,
+  .animate-sheet-up,
+  .animate-fade-in {
+    animation: none;
+  }
+}

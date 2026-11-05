@@ -1,0 +1,40 @@
+{
+  "name": "@rentanllm/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "next typegen && tsc -p . --noEmit",
+    "lint": "ultracite check .",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@grafana/faro-web-sdk": "2.12.1",
+    "@paper-design/shaders-react": "0.0.82",
+    "@rentanllm/api-contract": "workspace:*",
+    "@rentanllm/arkiv": "workspace:*",
+    "@rentanllm/core": "workspace:*",
+    "@tanstack/react-query": "5.104.5",
+    "connectkit": "1.9.2",
+    "cuelume": "0.2.8",
+    "effect": "4.0.6",
+    "next": "16.4.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "viem": "2.57.11",
+    "wagmi": "2.19.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "^22",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}

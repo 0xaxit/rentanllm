@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" width="640" height="240">
+  <!-- Renter: an API key with a soft glow. Grayscale, dithered at runtime. -->
+  <defs>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="0.55" stop-color="#b8b8b8"/>
+      <stop offset="1" stop-color="#5a5a5a"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="240" fill="#000"/>
+  <ellipse cx="320" cy="120" rx="230" ry="120" fill="url(#glow)"/>
+  <circle cx="220" cy="120" r="62" fill="url(#metal)"/>
+  <circle cx="220" cy="120" r="26" fill="#000"/>
+  <rect x="270" y="104" width="230" height="32" rx="4" fill="url(#metal)"/>
+  <rect x="440" y="136" width="22" height="34" fill="url(#metal)"/>
+  <rect x="474" y="136" width="22" height="24" fill="url(#metal)"/>
+  <text x="300" y="96" font-family="monospace" font-size="20" fill="#8a8a8a">rk_live_</text>
+</svg>
