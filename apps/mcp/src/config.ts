@@ -3,6 +3,7 @@
  * config). Every payment is capped per request and per rolling 24 hours, and needs the
  * person's approval unless approval is explicitly turned off for development.
  */
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,6 +39,7 @@ const USDC_AMOUNT = /^(?<whole>\d+)(?:\.(?<fraction>\d{1,6}))?$/u;
 const HEDERA_ACCOUNT = /^\d+\.\d+\.\d+$/u;
 const TRAILING_SLASHES = /\/+$/u;
 const V1_SUFFIX = /\/v1$/u;
+const HOME_PREFIX = /^~\//u;
 
 export class ConfigError extends Error {
   override readonly name = "ConfigError";
@@ -87,15 +89,45 @@ const parseAccount = (env: NodeJS.ProcessEnv): string => {
   return account;
 };
 
-/** Touch ID unless explicitly off; "none" is for development and needs a key in env. */
+/**
+ * The payer key without Touch ID: `RENTANLLM_MCP_PRIVATE_KEY`, or `RENTANLLM_MCP_KEY_FILE`
+ * holding either the raw key or JSON with a `privateKeyHex` field.
+ */
+const keyWithoutApproval = (env: NodeJS.ProcessEnv): string | null => {
+  const inline = env.RENTANLLM_MCP_PRIVATE_KEY?.trim();
+  if (inline !== undefined && inline.length > 0) {
+    return inline;
+  }
+  const file = env.RENTANLLM_MCP_KEY_FILE?.trim();
+  if (file === undefined || file.length === 0) {
+    return null;
+  }
+  const text = readFileSync(
+    file.replace(HOME_PREFIX, `${homedir()}/`),
+    "utf-8"
+  ).trim();
+  if (!text.startsWith("{")) {
+    return text;
+  }
+  const parsed = JSON.parse(text) as { privateKeyHex?: unknown };
+  if (typeof parsed.privateKeyHex !== "string") {
+    throw new ConfigError(`${file} has no "privateKeyHex" field`);
+  }
+  return parsed.privateKeyHex.trim();
+};
+
+/**
+ * Touch ID unless explicitly off. "none" pays without a person, inside the caps; it needs
+ * the key in RENTANLLM_MCP_PRIVATE_KEY or RENTANLLM_MCP_KEY_FILE.
+ */
 const parseApproval = (
   env: NodeJS.ProcessEnv
 ): { readonly approval: Approval; readonly insecureKey: string | null } => {
   if (env.RENTANLLM_MCP_APPROVAL === "none") {
-    const insecureKey = env.RENTANLLM_MCP_PRIVATE_KEY?.trim() || null;
+    const insecureKey = keyWithoutApproval(env);
     if (insecureKey === null) {
       throw new ConfigError(
-        "RENTANLLM_MCP_APPROVAL=none needs RENTANLLM_MCP_PRIVATE_KEY (development only)"
+        "RENTANLLM_MCP_APPROVAL=none needs RENTANLLM_MCP_PRIVATE_KEY or RENTANLLM_MCP_KEY_FILE"
       );
     }
     return { approval: "none", insecureKey };

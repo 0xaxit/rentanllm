@@ -7,6 +7,7 @@
  *   rentanllm-mcp                 serve over stdio (what an MCP client runs)
  *   rentanllm-mcp store-key       read the payer's private key from stdin into the keychain
  *   rentanllm-mcp key-status      say whether a key is stored
+ *   rentanllm-mcp agent "<prompt>" autonomous buyer: find a model, pay inside the caps, print the answer
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -14,8 +15,10 @@ import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import { runAgent } from "./agent.ts";
 import { ConfigError, keychainAccount, loadConfig } from "./config.ts";
 import type { McpConfig } from "./config.ts";
+import { MarketError } from "./market.ts";
 import { registerTools } from "./tools.ts";
 
 const VERSION = "0.0.1";
@@ -29,7 +32,11 @@ const signer = (config: McpConfig, args: readonly string[], input?: string) =>
 
 const main = async () => {
   const config = loadConfig();
-  const [command] = process.argv.slice(2);
+  const [command, ...rest] = process.argv.slice(2);
+  if (command === "agent") {
+    await runAgent(config, rest);
+    return;
+  }
   if (command === "store-key") {
     const key = readFileSync(0, "utf-8").trim();
     process.stdout.write(
@@ -53,7 +60,7 @@ try {
 } catch (error) {
   // stdout belongs to the MCP protocol; problems go to stderr.
   process.stderr.write(
-    `rentanllm-mcp: ${error instanceof ConfigError ? error.message : String(error)}\n`
+    `rentanllm-mcp: ${error instanceof ConfigError || error instanceof MarketError ? error.message : String(error)}\n`
   );
   process.exitCode = 1;
 }

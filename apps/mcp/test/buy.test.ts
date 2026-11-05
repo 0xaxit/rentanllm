@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync } from "node:fs";
+import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -198,6 +198,24 @@ describe("config", () => {
         RENTANLLM_MCP_PRIVATE_KEY: "k",
       })
     ).toThrow("RENTANLLM_MCP_ACCOUNT");
+  });
+
+  it("reads the payer key from a key file when approval is off", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "rentanllm-key-"));
+    const jsonFile = path.join(dir, "buyer.json");
+    writeFileSync(jsonFile, JSON.stringify({ privateKeyHex: " 0xabc " }));
+    const rawFile = path.join(dir, "raw.key");
+    writeFileSync(rawFile, "0xdef\n");
+    const base = {
+      RENTANLLM_MCP_ACCOUNT: "0.0.1",
+      RENTANLLM_MCP_APPROVAL: "none",
+    };
+    expect(
+      loadConfig({ ...base, RENTANLLM_MCP_KEY_FILE: jsonFile }).insecureKey
+    ).toBe("0xabc");
+    expect(
+      loadConfig({ ...base, RENTANLLM_MCP_KEY_FILE: rawFile }).insecureKey
+    ).toBe("0xdef");
   });
 
   it("only turns approval off with an explicit development key", () => {

@@ -19,6 +19,27 @@ An MCP server that lets an agent in Claude Desktop, Claude Code, Cursor or any o
 4. Only then read the key, sign that one payment and send the request.
 5. Record the payment in `spend.jsonl`. A payment counts even when the seller then fails to answer.
 
+## Autonomous agent
+
+`rentanllm-mcp agent "<prompt>"` buys one answer with no person in the loop:
+
+1. Finds a model on the market (`GET /v1/models`); without `--model` it takes the one with the cheapest online seller.
+2. Gets the price from the gateway's 402.
+3. Checks the per-request and 24-hour caps, plus `--max-price` if given.
+4. Signs that one payment with its own key, sends the request, and prints the answer with the Hedera transaction and its HashScan link.
+
+The caps are the only limit, so it needs approval off and a key file:
+
+```sh
+RENTANLLM_GATEWAY_URL=https://gw.31-97-230-118.sslip.io \
+RENTANLLM_MCP_ACCOUNT=0.0.11331175 \
+RENTANLLM_MCP_APPROVAL=none \
+RENTANLLM_MCP_KEY_FILE=~/.config/rentanllm/wallets/buyer.json \
+bun src/main.ts agent --max-tokens 64 "Say hi in five words"
+```
+
+Payments go into the same `spend.jsonl` as the MCP server's, so both count against one 24-hour cap.
+
 ## How the key is protected
 
 `signer/main.swift` builds `rentanllm-signer`, a small macOS helper:
@@ -75,7 +96,8 @@ ChatGPT can only connect to MCP servers hosted on the internet, and a hosted ser
 | `RENTANLLM_MCP_MAX_PER_DAY_USDC` | `1` | Most paid in any 24 hours |
 | `RENTANLLM_MCP_STATE_DIR` | `~/.config/rentanllm/mcp` | Where `spend.jsonl` is kept |
 | `RENTANLLM_MCP_SIGNER` | `dist/rentanllm-signer` | The approval helper |
-| `RENTANLLM_MCP_APPROVAL` | `touchid` | `none` turns approval off. Development only; it also needs `RENTANLLM_MCP_PRIVATE_KEY` |
+| `RENTANLLM_MCP_APPROVAL` | `touchid` | `none` pays without a person, inside the caps (the `agent` command needs it). Also needs `RENTANLLM_MCP_PRIVATE_KEY` or `RENTANLLM_MCP_KEY_FILE` |
+| `RENTANLLM_MCP_KEY_FILE` |  | With approval `none`: a file holding the payer key, raw or as JSON with `privateKeyHex` |
 
 ## Development
 

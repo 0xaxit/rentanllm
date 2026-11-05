@@ -9,7 +9,13 @@ import { z } from "zod";
 import { buyInference } from "./buy.ts";
 import { formatUsdc, usdcToMicros } from "./config.ts";
 import type { McpConfig } from "./config.ts";
-import { listModels, MarketError, payAndCall, requestQuote } from "./market.ts";
+import {
+  listModels,
+  MarketError,
+  payAndCall,
+  requestQuote,
+  txLine,
+} from "./market.ts";
 import type { ChatMessage, ChatRequest } from "./market.ts";
 import { approvedKey, PayerError, signPayment } from "./payer.ts";
 import { appendSpend, readSpends, spentLastDay } from "./spend.ts";
@@ -17,11 +23,6 @@ import { appendSpend, readSpends, spentLastDay } from "./spend.ts";
 const DEFAULT_MAX_TOKENS = 512;
 const MAX_TOKENS_LIMIT = 32_768;
 const RECENT_SPENDS = 10;
-
-const TX_URL: Readonly<Record<string, (tx: string) => string>> = {
-  "hedera:testnet": (tx) =>
-    `https://hashscan.io/testnet/transaction/${encodeURIComponent(tx)}`,
-};
 
 const text = (value: string) => ({
   content: [{ text: value, type: "text" as const }],
@@ -72,14 +73,6 @@ const explain = (error: unknown): string => {
     return error.message;
   }
   return `unexpected failure: ${String(error)}`;
-};
-
-const txLine = (network: string, tx: string | null): string => {
-  if (tx === null) {
-    return "payment: settled (no transaction id returned)";
-  }
-  const url = TX_URL[network]?.(tx);
-  return url === undefined ? `payment tx: ${tx}` : `payment tx: ${tx} (${url})`;
 };
 
 export const registerTools = (server: McpServer, config: McpConfig): void => {

@@ -53,6 +53,20 @@ export interface PaidAnswer {
   readonly tx: string | null;
 }
 
+const TX_URL: Readonly<Record<string, (tx: string) => string>> = {
+  "hedera:testnet": (tx) =>
+    `https://hashscan.io/testnet/transaction/${encodeURIComponent(tx)}`,
+};
+
+/** "payment tx: <id> (<HashScan link>)" for a receipt. */
+export const txLine = (network: string, tx: string | null): string => {
+  if (tx === null) {
+    return "payment: settled (no transaction id returned)";
+  }
+  const url = TX_URL[network]?.(tx);
+  return url === undefined ? `payment tx: ${tx}` : `payment tx: ${tx} (${url})`;
+};
+
 export class MarketError extends Error {
   override readonly name = "MarketError";
 }
