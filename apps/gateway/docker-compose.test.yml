@@ -1,0 +1,29 @@
+# Throwaway Postgres + Redis for the gateway integration tests (bun run test:integration).
+# Own project name and ports so it never collides with packages/db's dev database.
+# Postgres matches packages/db/docker-compose.dev.yml (postgres:17-alpine).
+name: rentanllm-gateway-test
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: rentanllm
+      POSTGRES_USER: rentanllm
+      POSTGRES_PASSWORD: rentanllm
+    ports:
+      - "54339:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rentanllm -d rentanllm"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "63799:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 60

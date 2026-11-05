@@ -1,0 +1,32 @@
+{
+  "name": "@rentanllm/gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/main.ts --target=node --format=esm --sourcemap=linked --external bufferutil --external utf-8-validate --outdir=dist",
+    "dev": "bun run build && node --enable-source-maps dist/main.js",
+    "start": "node --enable-source-maps dist/main.js",
+    "typecheck": "tsc -p .",
+    "test": "vitest run",
+    "test:integration": "vitest run -c vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.6",
+    "@effect/sql-pg": "4.0.6",
+    "@rentanllm/arkiv": "workspace:*",
+    "@rentanllm/core": "workspace:*",
+    "@rentanllm/db": "workspace:*",
+    "@rentanllm/protocol": "workspace:*",
+    "@x402/core": "2.28.0",
+    "drizzle-orm": "1.0.0-rc.5",
+    "effect": "4.0.6",
+    "redis": "6.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/ws": "8.18.1",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5",
+    "ws": "8.18.3"
+  }
+}

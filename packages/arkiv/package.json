@@ -1,0 +1,19 @@
+{
+  "name": "@rentanllm/arkiv",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@arkiv-network/sdk": "1.0.0",
+    "viem": "2.57.11"
+  },
+  "devDependencies": {
+    "vitest": "5.0.5"
+  }
+}

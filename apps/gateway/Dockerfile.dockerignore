@@ -1,0 +1,16 @@
+**/node_modules
+**/.next
+**/dist
+**/coverage
+**/.env
+**/.env.*
+.git
+.playwright-mcp
+# Other workspaces: only their manifests are needed so the lockfile resolves.
+apps/web/**
+!apps/web/package.json
+apps/node-agent/**
+!apps/node-agent/package.json
+apps/api/**
+!apps/api/package.json
+deploy/**

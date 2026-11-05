@@ -1,0 +1,29 @@
+{
+  "nodes": [
+    {
+      "nodeId": "node_dev",
+      "token": "nt_dev_local_only_not_a_secret",
+      "availability": {
+        "open": true,
+        "sessionCutoffPct": 100,
+        "weeklyCutoffPct": 100
+      }
+    }
+  ],
+  "offers": [
+    {
+      "listingId": "listing_dev",
+      "maxConcurrency": 2,
+      "models": ["llama3.1:8b"],
+      "nodeId": "node_dev",
+      "ownerId": "owner_dev",
+      "ownerWallet": "0x0000000000000000000000000000000000000de5",
+      "prices": {
+        "inputPerMTokMicros": 50000,
+        "outputPerMTokMicros": 200000,
+        "cacheReadPerMTokMicros": 0
+      },
+      "provider": "ollama"
+    }
+  ]
+}
