@@ -1,0 +1,14 @@
+{
+  "name": "@rentanllm/protocol",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "effect": "4.0.6"
+  }
+}
