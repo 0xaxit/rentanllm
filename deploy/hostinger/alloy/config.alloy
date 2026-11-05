@@ -1,0 +1,247 @@
+// Grafana Alloy: the single telemetry entry point.
+//
+//   OTLP (gateway on the Docker network, Vercel functions via Caddy at otel.<DOMAIN>)
+//     traces  -> Tempo   (OTLP gRPC)
+//     metrics -> Prometheus (remote write)
+//     logs    -> Loki    (native OTLP endpoint)
+//   Faro (browsers on the web app, via Caddy at otel.<DOMAIN>/collect)
+//     errors, logs, events, web vitals -> Loki (service_name=rentanllm-web)
+//   Docker container logs (via read-only socket proxy) -> Loki
+//   Probes + scrapes (gateway /healthz, Caddy, Redis, Tempo, Loki, Alloy) -> Prometheus
+
+// ---------------------------------------------------------------- OTLP in
+
+otelcol.receiver.otlp "default" {
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
+
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	output {
+		metrics = [otelcol.processor.memory_limiter.default.input]
+		logs    = [otelcol.processor.memory_limiter.default.input]
+		traces  = [otelcol.processor.memory_limiter.default.input]
+	}
+}
+
+otelcol.processor.memory_limiter "default" {
+	check_interval = "1s"
+	limit          = "350MiB"
+	spike_limit    = "80MiB"
+
+	output {
+		metrics = [otelcol.processor.batch.default.input]
+		logs    = [otelcol.processor.batch.default.input]
+		traces  = [otelcol.processor.batch.default.input]
+	}
+}
+
+otelcol.processor.batch "default" {
+	output {
+		metrics = [otelcol.exporter.prometheus.default.input]
+		logs    = [otelcol.exporter.otlphttp.loki.input]
+		traces  = [otelcol.exporter.otlp.tempo.input]
+	}
+}
+
+// ---------------------------------------------------------------- Faro in (browsers)
+
+// Browsers cannot hold a secret, so there is no bearer token here: Caddy only
+// forwards /collect when the Origin header is FARO_ALLOWED_ORIGIN, the
+// receiver checks CORS and the (public) app key, and rate limits per instance.
+faro.receiver "web" {
+	server {
+		listen_address           = "0.0.0.0"
+		listen_port              = 12347
+		cors_allowed_origins     = [sys.env("FARO_ALLOWED_ORIGIN")]
+		api_key                  = sys.env("FARO_APP_KEY")
+		max_allowed_payload_size = "2MiB"
+
+		rate_limiting {
+			enabled    = true
+			rate       = 50
+			burst_size = 100
+		}
+	}
+
+	output {
+		logs   = [loki.process.faro.receiver]
+		traces = [otelcol.processor.memory_limiter.default.input]
+	}
+}
+
+loki.process "faro" {
+	stage.static_labels {
+		values = {
+			service_name = "rentanllm-web",
+			source       = "faro",
+		}
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+// ---------------------------------------------------------------- exporters
+
+otelcol.exporter.otlp "tempo" {
+	client {
+		endpoint = "tempo:4317"
+
+		tls {
+			insecure = true
+		}
+	}
+}
+
+otelcol.exporter.otlphttp "loki" {
+	client {
+		endpoint = "http://loki:3100/otlp"
+	}
+}
+
+// Keep OTel metric names as they are (dots -> underscores only). No unit or _total
+// suffixes: Effect's OTLP exporter sends unit "1" by default (gauges would turn into
+// *_ratio), and monotonic counters would gain _total. With suffixes
+// off, gateway_requests stays gateway_requests whatever the gateway does later.
+// Histograms still get _bucket/_sum/_count.
+otelcol.exporter.prometheus "default" {
+	add_metric_suffixes = false
+	forward_to          = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+	endpoint {
+		url = "http://prometheus:9090/api/v1/write"
+	}
+
+	external_labels = {
+		env = sys.env("DEPLOY_ENV"),
+	}
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+
+	external_labels = {
+		env = sys.env("DEPLOY_ENV"),
+	}
+}
+
+// ---------------------------------------------------------------- container logs
+
+discovery.docker "compose" {
+	host             = "tcp://docker-socket-proxy:2375"
+	refresh_interval = "30s"
+
+	filter {
+		name   = "label"
+		values = ["com.docker.compose.project=rentanllm"]
+	}
+}
+
+discovery.relabel "compose" {
+	targets = discovery.docker.compose.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service_name"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+}
+
+loki.source.docker "compose" {
+	host          = "tcp://docker-socket-proxy:2375"
+	targets       = discovery.docker.compose.targets
+	relabel_rules = discovery.relabel.compose.rules
+	forward_to    = [loki.process.json.receiver]
+}
+
+// The gateway logs JSON (Effect consoleJson): lift the level into a label and
+// drop the access-log lines produced by the healthchecks and the blackbox probe.
+loki.process "json" {
+	stage.match {
+		selector = "{service_name=\"gateway\"}"
+
+		stage.drop {
+			expression = `"http.url":"/healthz"`
+		}
+
+		stage.json {
+			expressions = {level = "level"}
+		}
+
+		stage.labels {
+			values = {level = ""}
+		}
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+// ---------------------------------------------------------------- probes and scrapes
+
+// Gateway liveness from inside the box: probe_success{job="gateway-health"}.
+prometheus.exporter.blackbox "gateway" {
+	config = "{ modules: { http_2xx: { prober: http, timeout: 5s, http: { preferred_ip_protocol: ip4 } } } }"
+
+	target {
+		name    = "gateway"
+		address = "http://gateway:8787/healthz"
+		module  = "http_2xx"
+	}
+}
+
+discovery.relabel "gateway_probe" {
+	targets = prometheus.exporter.blackbox.gateway.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "gateway-health"
+	}
+}
+
+prometheus.scrape "gateway_probe" {
+	targets         = discovery.relabel.gateway_probe.output
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "15s"
+	job_name        = "gateway-health"
+}
+
+prometheus.exporter.redis "default" {
+	redis_addr     = "redis:6379"
+	redis_password = sys.env("REDIS_PASSWORD")
+}
+
+prometheus.scrape "redis" {
+	targets    = prometheus.exporter.redis.default.targets
+	forward_to = [prometheus.remote_write.default.receiver]
+	job_name   = "redis"
+}
+
+prometheus.exporter.self "alloy" { }
+
+prometheus.scrape "alloy" {
+	targets    = prometheus.exporter.self.alloy.targets
+	forward_to = [prometheus.remote_write.default.receiver]
+	job_name   = "alloy"
+}
+
+prometheus.scrape "infra" {
+	targets = [
+		{"__address__" = "caddy:9180", "job" = "caddy"},
+		{"__address__" = "tempo:3200", "job" = "tempo"},
+		{"__address__" = "loki:3100", "job" = "loki"},
+	]
+	forward_to      = [prometheus.remote_write.default.receiver]
+	scrape_interval = "30s"
+}

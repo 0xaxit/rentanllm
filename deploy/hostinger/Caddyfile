@@ -1,0 +1,106 @@
+# RentAnLLM edge. {$VAR} values come from the container env (see compose.yaml / .env).
+# Set DOMAIN=localhost for a local run: *.localhost names get Caddy's internal CA.
+# SITE_SCHEME is empty (Caddy terminates TLS itself) or "http://" when an existing
+# reverse proxy such as Traefik terminates TLS in front of Caddy (EDGE_MODE=traefik).
+{
+	email {$ACME_EMAIL}
+	# Prometheus metrics for every site; served only on the internal :9180 listener below.
+	metrics
+	servers {
+		# Long-lived renter streams and node tunnels: no read/write deadlines,
+		# keep idle keep-alive connections for a while.
+		timeouts {
+			read_body 2m
+			read_header 30s
+			idle 10m
+		}
+	}
+}
+
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+}
+
+# Renter API (/v1/messages, SSE) and the owner-node WebSocket (/tunnel).
+{$SITE_SCHEME}gw.{$DOMAIN} {
+	import security_headers
+
+	request_body {
+		max_size 12MB
+	}
+
+	reverse_proxy gateway:8787 {
+		# Never buffer: SSE tokens must reach the renter as they are produced.
+		flush_interval -1
+		# While the gateway restarts on deploy, hold new requests instead of failing fast.
+		lb_try_duration 30s
+		lb_try_interval 500ms
+		# Keep WebSocket tunnels open across `caddy reload` instead of cutting them.
+		stream_close_delay 10m
+		transport http {
+			dial_timeout 5s
+			# The gateway answers 504 itself after GATEWAY_HEAD_TIMEOUT_MS (120s).
+			response_header_timeout 150s
+			keepalive 2m
+		}
+	}
+}
+
+# OTLP/HTTP ingest for Vercel functions (bearer token, only the three OTLP paths)
+# and Faro browser telemetry at /collect (no token: browsers cannot keep one).
+{$SITE_SCHEME}otel.{$DOMAIN} {
+	import security_headers
+
+	request_body {
+		max_size 16MB
+	}
+
+	# Faro from the web app. Only the web app's Origin gets through (CORS
+	# preflights included); Alloy's faro.receiver answers CORS, checks the
+	# public app key and rate limits.
+	@faro {
+		path /collect /collect/*
+		header Origin {$FARO_ALLOWED_ORIGIN}
+	}
+	handle @faro {
+		request_body {
+			max_size 2MB
+		}
+		reverse_proxy alloy:12347
+	}
+
+	@otlp {
+		method POST
+		path /v1/traces /v1/metrics /v1/logs
+		header Authorization "Bearer {$OTEL_INGEST_TOKEN}"
+	}
+	handle @otlp {
+		reverse_proxy alloy:4318
+	}
+
+	# Right token, wrong path or method.
+	@authorized header Authorization "Bearer {$OTEL_INGEST_TOKEN}"
+	handle @authorized {
+		respond 404
+	}
+
+	handle {
+		respond 401
+	}
+}
+
+# Grafana does its own login (admin password from .env, sign-up off).
+{$SITE_SCHEME}grafana.{$DOMAIN} {
+	import security_headers
+	reverse_proxy grafana:3000
+}
+
+# Internal only: port 9180 is not published, Alloy scrapes it over the Docker network.
+:9180 {
+	metrics /metrics
+}

@@ -1,0 +1,12 @@
+# Prometheus is storage + query only. Alloy pushes every series here through
+# remote write (OTLP metrics from the gateway and Vercel, health probes, infra
+# scrapes); Tempo's metrics generator pushes span metrics. Retention: 7d / 8GB
+# (flags in compose.yaml). Alerting lives in Grafana, not here.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["127.0.0.1:9090"]

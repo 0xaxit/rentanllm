@@ -1,0 +1,428 @@
+# RentAnLLM edge box (Hostinger VPS, ~8 GB RAM).
+#
+#   Caddy (only public entry, 80/443) -> gateway, Alloy OTLP, Grafana
+#   gateway -> Redis; gateway + Vercel functions -> Alloy -> Tempo / Loki / Prometheus -> Grafana
+#
+# Usage (from this directory, with a filled-in .env next to this file):
+#   ./deploy.sh                      # pull or build, then roll everything
+#   docker compose config -q         # validate
+# See README.md for provisioning and the RAM budget.
+
+name: rentanllm
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Static busybox copied into a volume so the distroless Tempo and Loki images
+# (no shell, no wget) can still run an HTTP healthcheck.
+x-hc-tools: &hc-tools
+  type: volume
+  source: hc-tools
+  target: /hc
+  read_only: true
+
+services:
+  caddy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+      OTEL_INGEST_TOKEN: ${OTEL_INGEST_TOKEN:?set OTEL_INGEST_TOKEN in .env}
+      FARO_ALLOWED_ORIGIN: ${FARO_ALLOWED_ORIGIN:?set FARO_ALLOWED_ORIGIN in .env}
+      # "http://" behind an existing TLS proxy (compose.traefik.yaml); empty otherwise.
+      SITE_SCHEME: ${CADDY_SITE_SCHEME:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-q",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1:9180/metrics",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+    logging: *logging
+
+  gateway:
+    image: ${GATEWAY_IMAGE:-rentanllm-gateway:local}
+    build:
+      context: ../..
+      dockerfile: apps/gateway/Dockerfile
+    restart: unless-stopped
+    # App settings and app secrets (DATABASE_URL, x402 wallet, tuning knobs; see
+    # gateway.env.example and apps/gateway/README.md). Optional so the stack starts without it.
+    env_file:
+      - path: ./gateway.env
+        required: false
+    # Wiring owned by this stack; overrides anything in gateway.env.
+    environment:
+      PORT: "8787"
+      HOST: 0.0.0.0
+      LOG_FORMAT: json
+      NODE_OPTIONS: --max-old-space-size=768
+      GATEWAY_PUBLIC_URL: https://gw.${DOMAIN}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_SERVICE_NAME: rentanllm-gateway
+      DEPLOY_ENV: ${DEPLOY_ENV:-production}
+      # Set by deploy.sh from the image tag; shows up as service.version on traces.
+      GATEWAY_VERSION: ${GATEWAY_VERSION:-unknown}
+    depends_on:
+      redis: { condition: service_healthy }
+      alloy: { condition: service_started }
+    networks: [edge, internal]
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8787/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    # Lets in-flight streams finish before SIGKILL on redeploy.
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1.50", memory: 1G }
+        reservations: { memory: 256M }
+    logging: *logging
+
+  redis:
+    image: redis:8.10.2-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+      - --maxmemory
+      - 192mb
+      # Budgets and rate-limit counters must never be silently dropped.
+      - --maxmemory-policy
+      - noeviction
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+    logging: *logging
+
+  # Calls the control-plane API's /cron/tick every minute (Vercel Hobby crons run
+  # only once a day). Idles when API_CRON_ORIGIN is empty, e.g. on a Pro plan where
+  # Vercel Cron does it.
+  scheduler:
+    image: curlimages/curl:8.17.0
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -z "$$API_CRON_ORIGIN" ]; then echo "API_CRON_ORIGIN unset, idling"; exec sleep infinity; fi
+        while true; do
+          for path in /cron/tick; do
+            code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 55 \
+              -H "Authorization: Bearer $$CRON_SECRET" "$$API_CRON_ORIGIN$$path")
+            echo "$$(date -u +%FT%TZ) $$path $$code"
+          done
+          sleep 60
+        done
+    environment:
+      API_CRON_ORIGIN: ${API_CRON_ORIGIN:-}
+      CRON_SECRET: ${CRON_SECRET:-}
+    networks: [edge]
+    deploy:
+      resources:
+        limits: { cpus: "0.10", memory: 32M }
+    logging: *logging
+
+  # --- Observability (LGTM minus Mimir) ------------------------------------------
+
+  alloy:
+    image: grafana/alloy:v1.21.2
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - --disable-reporting
+      - /etc/alloy/config.alloy
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DEPLOY_ENV: ${DEPLOY_ENV:-production}
+      FARO_ALLOWED_ORIGIN: ${FARO_ALLOWED_ORIGIN:?set FARO_ALLOWED_ORIGIN in .env}
+      FARO_APP_KEY: ${FARO_APP_KEY:?set FARO_APP_KEY in .env}
+    labels:
+      rentanllm.config-hash: ${ALLOY_CONFIG_HASH:-}
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+    depends_on:
+      docker-socket-proxy: { condition: service_healthy }
+      prometheus: { condition: service_healthy }
+      loki: { condition: service_healthy }
+      tempo: { condition: service_healthy }
+    networks: [edge, internal]
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - 'exec 3<>/dev/tcp/127.0.0.1/12345 && printf "GET /-/ready HTTP/1.0\r\n\r\n" >&3 && head -n1 <&3 | grep -q " 200 "'
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "0.75", memory: 512M }
+    logging: *logging
+
+  # Read-only Docker API (containers list + logs) for Alloy's log collection,
+  # so Alloy never gets the raw Docker socket.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    restart: unless-stopped
+    environment:
+      CONTAINERS: "1"
+      EVENTS: "1"
+      NETWORKS: "1" # discovery.docker reads network labels
+      INFO: "0"
+      POST: "0"
+      PING: "1"
+      VERSION: "1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [internal]
+    healthcheck:
+      test:
+        ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2375/_ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 64M }
+    logging: *logging
+
+  hc-tools:
+    image: busybox:1.37.0-musl
+    command: ["cp", "/bin/busybox", "/hc/busybox"]
+    restart: "no"
+    volumes:
+      - hc-tools:/hc
+    network_mode: none
+    deploy:
+      resources:
+        limits: { cpus: "0.10", memory: 16M }
+
+  tempo:
+    image: grafana/tempo:2.10.10
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    labels:
+      rentanllm.config-hash: ${TEMPO_CONFIG_HASH:-}
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+      - *hc-tools
+    depends_on:
+      hc-tools: { condition: service_completed_successfully }
+      tempo-init: { condition: service_completed_successfully }
+    networks: [internal]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/hc/busybox",
+          "wget",
+          "-q",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1:3200/ready",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 768M }
+    logging: *logging
+
+  # Tempo runs as uid 10001; a fresh named volume is root-owned.
+  tempo-init:
+    image: busybox:1.37.0-musl
+    command: ["chown", "-R", "10001:10001", "/var/tempo"]
+    restart: "no"
+    user: root
+    volumes:
+      - tempo-data:/var/tempo
+    network_mode: none
+    deploy:
+      resources:
+        limits: { cpus: "0.10", memory: 16M }
+
+  loki:
+    image: grafana/loki:3.7.9
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    labels:
+      rentanllm.config-hash: ${LOKI_CONFIG_HASH:-}
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+      - *hc-tools
+    depends_on:
+      hc-tools: { condition: service_completed_successfully }
+    networks: [internal]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/hc/busybox",
+          "wget",
+          "-q",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1:3100/ready",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 1G }
+    logging: *logging
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=8GB
+      # Alloy pushes everything (OTLP metrics, probes, scrapes) via remote write.
+      - --web.enable-remote-write-receiver
+      - --web.enable-lifecycle
+    labels:
+      rentanllm.config-hash: ${PROMETHEUS_CONFIG_HASH:-}
+    volumes:
+      - ./prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
+    networks: [internal]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-q",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1:9090/-/ready",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 1G }
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    restart: unless-stopped
+    environment:
+      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_LOG_MODE: console
+      GRAFANA_ALERT_WEBHOOK_URL: ${GRAFANA_ALERT_WEBHOOK_URL:?set GRAFANA_ALERT_WEBHOOK_URL in .env}
+    labels:
+      rentanllm.config-hash: ${GRAFANA_CONFIG_HASH:-}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus: { condition: service_healthy }
+      loki: { condition: service_healthy }
+      tempo: { condition: service_healthy }
+    networks: [edge, internal]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-q",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1:3000/api/health",
+        ]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 768M }
+    logging: *logging
+
+networks:
+  # Reachable from Caddy; has internet egress (ACME, alert webhooks).
+  edge: {}
+  # No egress, no published ports: Redis and the storage backends live only here.
+  internal:
+    internal: true
+
+volumes:
+  caddy-data: {}
+  caddy-config: {}
+  redis-data: {}
+  alloy-data: {}
+  tempo-data: {}
+  loki-data: {}
+  prometheus-data: {}
+  grafana-data: {}
+  hc-tools: {}

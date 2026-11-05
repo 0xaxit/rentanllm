@@ -1,0 +1,28 @@
+# Override for hosts where an existing Traefik already owns ports 80/443
+# (EDGE_MODE=traefik in .env; deploy.sh adds this file automatically).
+#
+# Traefik terminates TLS for gw./otel./grafana.<DOMAIN> with its own certificate
+# resolver and forwards plain HTTP to this stack's Caddy, which keeps doing the
+# routing, OTLP bearer check, Faro origin check and unbuffered streaming.
+# Nothing in the existing Traefik configuration changes.
+
+services:
+  caddy:
+    ports: !reset []
+    environment:
+      SITE_SCHEME: "http://"
+    networks: [edge, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-root_default}
+      traefik.http.routers.rentanllm.rule: Host(`gw.${DOMAIN}`) || Host(`otel.${DOMAIN}`) || Host(`grafana.${DOMAIN}`)
+      traefik.http.routers.rentanllm.entrypoints: websecure
+      traefik.http.routers.rentanllm.tls: "true"
+      traefik.http.routers.rentanllm.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-mytlschallenge}
+      traefik.http.routers.rentanllm.service: rentanllm
+      traefik.http.services.rentanllm.loadbalancer.server.port: "80"
+
+networks:
+  traefik:
+    name: ${TRAEFIK_NETWORK:-root_default}
+    external: true

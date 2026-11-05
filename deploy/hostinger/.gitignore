@@ -1,0 +1,2 @@
+# Secrets for this stack. .env is already ignored at the repo root.
+/gateway.env

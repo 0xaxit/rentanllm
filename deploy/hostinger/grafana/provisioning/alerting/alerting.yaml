@@ -1,0 +1,119 @@
+# Grafana-managed alerting: one webhook contact point, three gateway rules.
+# gateway_* series come from the gateway's Effect metrics via OTLP -> Alloy -> Prometheus
+# (see deploy/hostinger/README.md, "Metric contract").
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: ops-webhook
+    receivers:
+      - uid: ops-webhook
+        type: webhook
+        disableResolveMessage: false
+        settings:
+          url: ${GRAFANA_ALERT_WEBHOOK_URL}
+          httpMethod: POST
+
+policies:
+  - orgId: 1
+    receiver: ops-webhook
+    group_by: ["grafana_folder", "alertname"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+
+groups:
+  - orgId: 1
+    name: gateway
+    folder: RentAnLLM
+    interval: 1m
+    rules:
+      - uid: rentanllm-gateway-down
+        title: Gateway down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: max(probe_success{job="gateway-health"})
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        # The probe series vanishing means Alloy or Prometheus is down too: page anyway.
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: gw /healthz has failed for 2 minutes
+          description: The in-box probe of http://gateway:8787/healthz is failing. Renters get 502s and owner tunnels are down.
+
+      - uid: rentanllm-no-node-heartbeats
+        title: No node heartbeats
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # The gateway drops a node after 3 missed heartbeats, so "no connected
+              # node" is the heartbeat signal.
+              expr: sum(max_over_time(gateway_nodes_connected[10m])) or vector(0)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: No owner node connected for 10 minutes
+          description: gateway_nodes_connected has been 0 for 10 minutes. Every node has disconnected or missed 3 heartbeats, so no renter request can be served.
+
+      - uid: rentanllm-gateway-error-rate
+        title: Gateway 5xx rate spike
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            # 5xx share of requests. The denominator is floored at 0.05 req/s so one
+            # error during a quiet hour does not page.
+            model:
+              refId: A
+              expr: >-
+                (sum(rate(gateway_requests{status=~"5.."}[5m])) or vector(0)) / clamp_min(sum(rate(gateway_requests[5m])) or vector(0), 0.05)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.05] }
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 5% of gateway requests are 5xx
+          description: Check the RentAnLLM gateway dashboard and gateway logs in Loki ({service_name="gateway"}).
