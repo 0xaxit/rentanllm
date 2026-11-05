@@ -1,0 +1,27 @@
+{
+  "name": "@rentanllm/node-agent",
+  "version": "0.0.1",
+  "private": true,
+  "bin": {
+    "ral": "./src/main.ts"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/main.ts",
+    "build": "bun build src/main.ts --compile --outfile dist/ral",
+    "typecheck": "tsc -p .",
+    "test": "bun --bun vitest run",
+    "release": "sh scripts/release.sh"
+  },
+  "dependencies": {
+    "@effect/platform-bun": "4.0.6",
+    "@rentanllm/protocol": "workspace:*",
+    "effect": "4.0.6"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.6",
+    "@types/bun": "1.3.10",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}
