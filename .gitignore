@@ -1,0 +1,21 @@
+node_modules/
+.next/
+dist/
+.turbo/
+.vercel/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+!.env.dev.example
+.DS_Store
+/.playwright-mcp/
+*.tsbuildinfo
+next-env.d.ts
+
+# Playwright output
+playwright-report/
+test-results/
+blob-report/
+.vercel
