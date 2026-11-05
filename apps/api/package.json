@@ -1,0 +1,28 @@
+{
+  "name": "@rentanllm/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch scripts/dev-server.ts",
+    "build": "bun scripts/build-vercel.ts",
+    "typecheck": "tsc -p .",
+    "test": "vitest run",
+    "test:integration": "DATABASE_URL=${DATABASE_URL:-postgres://rentanllm:rentanllm@localhost:54349/rentanllm} vitest run",
+    "db:sync": "bun run --cwd ../../packages/db db:sync"
+  },
+  "dependencies": {
+    "@effect/sql-pg": "4.0.6",
+    "@rentanllm/api-contract": "workspace:*",
+    "@rentanllm/core": "workspace:*",
+    "@rentanllm/db": "workspace:*",
+    "@vercel/functions": "3.10.0",
+    "drizzle-orm": "1.0.0-rc.5",
+    "effect": "4.0.6",
+    "viem": "2.57.11"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.6",
+    "@types/node": "^22",
+    "vitest": "5.0.5"
+  }
+}
