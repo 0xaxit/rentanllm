@@ -177,6 +177,7 @@ describe.runIf(baseUrl !== undefined)("MCP connector", () => {
     expect(names.toSorted()).toEqual([
       "agent_wallet",
       "buy_inference",
+      "generate_image",
       "list_models",
       "quote_inference",
     ]);

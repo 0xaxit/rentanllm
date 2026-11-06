@@ -24,6 +24,13 @@ import { z } from "zod";
 
 import { arkivModelsShape, modelsFromOffers, modelsText } from "./arkiv-models";
 import type { ArkivModels } from "./arkiv-models";
+import {
+  IMAGE_VIEWER_URI,
+  imageViewerHtml,
+  imageViewerToolMeta,
+  MCP_APP_MIME_TYPE,
+} from "./image-viewer";
+import type { ImageCaption } from "./image-viewer";
 
 const NETWORK = "hedera:testnet";
 /** The image model the market sells today; generate_image uses it unless told otherwise. */
@@ -349,9 +356,28 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
     }
   );
 
+  server.registerResource(
+    "Image viewer",
+    IMAGE_VIEWER_URI,
+    {
+      description: "Shows a generate_image result in the chat.",
+      mimeType: MCP_APP_MIME_TYPE,
+    },
+    () => ({
+      contents: [
+        {
+          mimeType: MCP_APP_MIME_TYPE,
+          text: imageViewerHtml,
+          uri: IMAGE_VIEWER_URI,
+        },
+      ],
+    })
+  );
+
   server.registerTool(
     "generate_image",
     {
+      _meta: imageViewerToolMeta,
       annotations: {
         destructiveHint: false,
         idempotentHint: false,
@@ -428,6 +454,18 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
             isError: true,
           };
         }
+        const caption: ImageCaption = {
+          model: request.model,
+          payment: {
+            amount_usdc: formatUsdc(price),
+            from: signer.accountId,
+            to: quote.terms.payTo,
+            transaction: image.tx,
+            url: image.tx === null ? null : hashscanTx(image.tx),
+          },
+          prompt: request.prompt,
+          size: request.size,
+        };
         return {
           content: [
             {
@@ -437,6 +475,7 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
             },
             { text: `${head}\n\n${paid}`, type: "text" as const },
           ],
+          structuredContent: { ...caption },
         };
       } catch (error) {
         return failure(`Not paid: ${explain(error)}`);
