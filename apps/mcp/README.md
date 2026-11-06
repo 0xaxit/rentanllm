@@ -69,8 +69,8 @@ The first person to approve is pinned in `<state dir>/world-subject`; later appr
 
 ```json
 "env": {
-  "RENTANLLM_API_URL": "https://<the API>",
-  "RENTANLLM_GATEWAY_URL": "https://gw.31-97-230-118.sslip.io",
+  "RENTANLLM_API_URL": "https://api.rentanllm.xyz",
+  "RENTANLLM_GATEWAY_URL": "https://gw.rentanllm.xyz",
   "RENTANLLM_MCP_ACCOUNT": "0.0.12345",
   "RENTANLLM_MCP_APPROVAL": "world",
   "RENTANLLM_MCP_AUTO_APPROVE_USDC": "0.001",
