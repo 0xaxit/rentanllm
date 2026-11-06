@@ -9,8 +9,13 @@
 import { InvalidRequest } from "@rentanllm/api-contract";
 import type { BuyerOverview, BuyerPolicy } from "@rentanllm/api-contract";
 import { Db } from "@rentanllm/db";
-import { buyerPolicies, paidRequests, users } from "@rentanllm/db/schema";
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import {
+  agentWallets,
+  buyerPolicies,
+  paidRequests,
+  users,
+} from "@rentanllm/db/schema";
+import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { Effect } from "effect";
 
 import { dieOnDbError } from "../db-errors";
@@ -74,6 +79,13 @@ export const buyerOverview = Effect.fn("buyer.overview")(
       } satisfies BuyerOverview;
     }
     const since = new Date(now.getTime() - DAY_MS);
+    // The buyer's own account and their agent wallet share the limits and the totals.
+    const [wallet] = yield* db
+      .select({ accountId: agentWallets.accountId })
+      .from(agentWallets)
+      .where(eq(agentWallets.userId, userId));
+    const payers =
+      wallet === undefined ? [account] : [account, wallet.accountId];
     const [bySeller, recent] = yield* Effect.all(
       [
         db
@@ -85,7 +97,7 @@ export const buyerOverview = Effect.fn("buyer.overview")(
           .from(paidRequests)
           .where(
             and(
-              eq(paidRequests.payer, account),
+              inArray(paidRequests.payer, payers),
               gt(paidRequests.createdAt, since)
             )
           )
@@ -93,7 +105,7 @@ export const buyerOverview = Effect.fn("buyer.overview")(
         db
           .select()
           .from(paidRequests)
-          .where(eq(paidRequests.payer, account))
+          .where(inArray(paidRequests.payer, payers))
           .orderBy(desc(paidRequests.createdAt), desc(paidRequests.id))
           .limit(RECENT_PAYMENTS),
       ],

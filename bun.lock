@@ -18,13 +18,17 @@
       "name": "@rentanllm/api",
       "dependencies": {
         "@effect/sql-pg": "4.0.6",
+        "@hashgraph/sdk": "2.81.0",
+        "@modelcontextprotocol/sdk": "1.32.1",
         "@rentanllm/api-contract": "workspace:*",
         "@rentanllm/core": "workspace:*",
         "@rentanllm/db": "workspace:*",
+        "@rentanllm/mcp": "workspace:*",
         "@vercel/functions": "3.10.0",
         "drizzle-orm": "1.0.0-rc.5",
         "effect": "4.0.6",
         "viem": "2.57.11",
+        "zod": "4.6.6",
       },
       "devDependencies": {
         "@effect/vitest": "4.0.6",

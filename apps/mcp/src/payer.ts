@@ -78,17 +78,33 @@ export const approvedKey = async (
   }
 };
 
-const clientFor = (config: McpConfig, key: string): x402Client => {
+const clientFor = (
+  account: string,
+  network: McpConfig["network"],
+  key: string
+): x402Client => {
   const client = new x402Client();
-  // The MCP server enforces its own caps before asking for approval.
+  // The caller enforces its own caps before asking for approval.
   client.setSpendControls(false);
   const signer = createClientHederaSigner(
-    config.account,
+    account,
     PrivateKey.fromStringECDSA(key),
-    { network: config.network }
+    { network }
   );
-  return client.register(config.network, new ExactHederaScheme(signer));
+  return client.register(network, new ExactHederaScheme(signer));
 };
+
+/** Signs exactly the quoted terms as `account` with `key`. */
+export const signPaymentAs = async (
+  account: string,
+  network: McpConfig["network"],
+  key: string,
+  quote: Quote
+): Promise<PaymentPayload> =>
+  await clientFor(account, network, key).createPaymentPayload({
+    ...quote.paymentRequired,
+    accepts: [quote.terms],
+  });
 
 /** Signs exactly the quoted terms with the approved key. */
 export const signPayment = async (
@@ -96,7 +112,4 @@ export const signPayment = async (
   key: string,
   quote: Quote
 ): Promise<PaymentPayload> =>
-  await clientFor(config, key).createPaymentPayload({
-    ...quote.paymentRequired,
-    accepts: [quote.terms],
-  });
+  await signPaymentAs(config.account, config.network, key, quote);

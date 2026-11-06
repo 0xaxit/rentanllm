@@ -137,6 +137,8 @@ export const PostgresMarketStore = Layer.effect(MarketStore)(
                  paused, per_seller_daily_micros
           from buyer_policies
           where payer_account = ${payer}
+             or user_id = (select user_id from agent_wallets where account_id = ${payer})
+          limit 1
         `.pipe(
           Effect.map(([row]) => (row === undefined ? null : policyOf(row))),
           Effect.mapError(storeError)
@@ -147,7 +149,19 @@ export const PostgresMarketStore = Layer.effect(MarketStore)(
                  coalesce(sum(paid_usdc_micros) filter (where pay_to = ${payTo}), 0)
                    as to_seller
           from paid_requests
-          where payer = ${payer} and created_at > ${since}
+          where created_at > ${since}
+            and payer in (
+              -- Every account of the payer's user: their own and their agent wallet.
+              with owner as (
+                select user_id from buyer_policies where payer_account = ${payer}
+                union select user_id from agent_wallets where account_id = ${payer}
+              )
+              select ${payer}::text
+              union select payer_account from buyer_policies
+                where user_id in (select user_id from owner) and payer_account is not null
+              union select account_id from agent_wallets
+                where user_id in (select user_id from owner)
+            )
         `.pipe(
           Effect.map(([row]) => ({
             toSellerMicros: toMicros(row?.to_seller ?? 0),

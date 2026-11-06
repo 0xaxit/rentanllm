@@ -7,6 +7,9 @@
     "rentanllm-mcp": "./src/main.ts"
   },
   "type": "module",
+  "exports": {
+    "./remote": "./src/remote.ts"
+  },
   "scripts": {
     "build:signer": "swiftc -O signer/main.swift -o dist/rentanllm-signer -framework LocalAuthentication -framework Security",
     "dev": "bun src/main.ts",

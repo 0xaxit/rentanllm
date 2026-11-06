@@ -9,6 +9,7 @@ import { AuthStorePg } from "../../src/auth/auth-store";
 import { SignatureVerifierEoa } from "../../src/auth/signature-verifier";
 import { ApiConfig, makeTestConfig } from "../../src/config";
 import type { ApiConfigShape } from "../../src/config";
+import { agentWalletChainStub } from "../../src/hedera/agent-wallets";
 import { hederaMirrorStub } from "../../src/hedera/mirror";
 import type { HederaMirror } from "../../src/hedera/mirror";
 import { erc8004Stub } from "../../src/reputation/erc8004";
@@ -21,7 +22,25 @@ export interface CallOptions {
   readonly bearer?: string | undefined;
   readonly body?: unknown;
   readonly cookie?: string | undefined;
+  /** Sent as application/x-www-form-urlencoded instead of a JSON body. */
+  readonly form?: Record<string, string> | undefined;
+  readonly headers?: Record<string, string> | undefined;
 }
+
+const requestBody = (options: CallOptions): string | null => {
+  if (options.form !== undefined) {
+    return new URLSearchParams(options.form).toString();
+  }
+  return options.body === undefined ? null : JSON.stringify(options.body);
+};
+
+const parseJson = (text: string): unknown => {
+  try {
+    return text.length > 0 ? JSON.parse(text) : null;
+  } catch {
+    return null;
+  }
+};
 
 export const makeTestApp = (
   url: string,
@@ -36,7 +55,8 @@ export const makeTestApp = (
     AuthStorePg,
     SignatureVerifierEoa,
     mirror,
-    erc8004
+    erc8004,
+    agentWalletChainStub()
   ).pipe(
     Layer.provideMerge(dbLayer({ maxConnections: 4, url: Redacted.make(url) })),
     Layer.provideMerge(Layer.succeed(ApiConfig)(config)),
@@ -56,9 +76,12 @@ export const makeTestApp = (
     path: string,
     options: CallOptions = {}
   ) => {
-    const headers = new Headers();
+    const headers = new Headers(options.headers);
     if (options.body !== undefined) {
       headers.set("content-type", "application/json");
+    }
+    if (options.form !== undefined) {
+      headers.set("content-type", "application/x-www-form-urlencoded");
     }
     if (options.cookie !== undefined) {
       headers.set("cookie", `rentanllm_session=${options.cookie}`);
@@ -68,7 +91,7 @@ export const makeTestApp = (
     }
     const response = await web.handler(
       new Request(`http://localhost${path}`, {
-        body: options.body === undefined ? null : JSON.stringify(options.body),
+        body: requestBody(options),
         headers,
         method,
       })
@@ -76,11 +99,13 @@ export const makeTestApp = (
     const text = await response.text();
     const setCookie = response.headers.get("set-cookie") ?? "";
     return {
+      headers: response.headers,
       // oxlint-disable-next-line typescript/no-explicit-any -- test responses are loosely typed JSON
-      json: (text.length > 0 ? JSON.parse(text) : null) as any,
+      json: parseJson(text) as any,
       sessionCookie: SESSION_COOKIE_PATTERN.exec(setCookie)?.groups?.token,
       setCookie,
       status: response.status,
+      text,
     };
   };
 

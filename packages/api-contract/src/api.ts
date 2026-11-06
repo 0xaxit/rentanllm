@@ -5,6 +5,7 @@ import { AuthGroup } from "./groups/auth";
 import { BuyerGroup } from "./groups/buyer";
 import { CronGroup } from "./groups/cron";
 import { MarketGroup } from "./groups/market";
+import { OAuthGroup } from "./groups/oauth";
 import { OwnerGroup } from "./groups/owner";
 import { PricingGroup } from "./groups/pricing";
 import { SystemGroup } from "./groups/system";
@@ -18,5 +19,6 @@ export class RentAnLlmApi extends HttpApi.make("rentanllm")
   .add(OwnerGroup)
   .add(BuyerGroup)
   .add(AgentsGroup)
+  .add(OAuthGroup)
   .add(CronGroup)
   .annotateMerge(OpenApi.annotations({ title: "RentAnLLM API" })) {}

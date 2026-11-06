@@ -364,3 +364,74 @@ export const agentIdentities = pgTable("agent_identities", {
   /** The HCS-14 Universal Agent ID in the registration file. */
   uaid: text("uaid").notNull(),
 });
+
+/**
+ * A buyer's agent wallet: a Hedera account the platform created for them so a remote MCP
+ * client (Claude Desktop) can pay sellers without the buyer's own key. The buyer tops it
+ * up with USDC from their wallet; the gateway applies the buyer's limits to it as to their
+ * own account. The private key is stored encrypted (AES-256-GCM, AGENT_WALLET_KEK).
+ */
+export const agentWallets = pgTable("agent_wallets", {
+  /** The Hedera account, "0.0.x". */
+  accountId: text("account_id").notNull().unique(),
+  createdAt: createdAt(),
+  /** base64 of iv (12) | tag (16) | ciphertext of the hex ECDSA key. */
+  encryptedKey: text("encrypted_key").notNull(),
+  /** Lowercase EVM alias of the account's ECDSA key. */
+  evmAddress: text("evm_address").notNull().unique(),
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+});
+
+/** OAuth 2.1 clients registered dynamically (RFC 7591), e.g. Claude Desktop's connector. */
+export const oauthClients = pgTable("oauth_clients", {
+  createdAt: createdAt(),
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  redirectUris: text("redirect_uris").array().notNull(),
+});
+
+/**
+ * One authorization request: created at /oauth/authorize, approved by a signed-in user on
+ * the web consent page (which sets `user_id` and the code), redeemed once at /oauth/token.
+ */
+export const oauthGrants = pgTable("oauth_grants", {
+  approvedAt: timestamptz("approved_at"),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => oauthClients.id, { onDelete: "cascade" }),
+  /** PKCE S256 challenge. */
+  codeChallenge: text("code_challenge").notNull(),
+  /** SHA-256 hex of the authorization code; null until approved. */
+  codeHash: text("code_hash").unique(),
+  createdAt: createdAt(),
+  expiresAt: timestamptz("expires_at").notNull(),
+  id: text("id").primaryKey(),
+  redirectUri: text("redirect_uri").notNull(),
+  resource: text("resource"),
+  scope: text("scope"),
+  state: text("state"),
+  usedAt: timestamptz("used_at"),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+});
+
+/** Access and refresh tokens issued to OAuth clients; only their SHA-256 hashes are kept. */
+export const oauthTokens = pgTable(
+  "oauth_tokens",
+  {
+    accessExpiresAt: timestamptz("access_expires_at").notNull(),
+    accessHash: text("access_hash").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthClients.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+    refreshExpiresAt: timestamptz("refresh_expires_at").notNull(),
+    refreshHash: text("refresh_hash").notNull().unique(),
+    revokedAt: timestamptz("revoked_at"),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => [index("oauth_tokens_user_id_idx").on(t.userId)]
+);

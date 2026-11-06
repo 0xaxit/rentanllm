@@ -349,6 +349,31 @@ export const ReputationReportSchema = Schema.Struct({
   skipped: Schema.NullOr(Schema.String),
 });
 
+// Agent wallets and the remote MCP connector (OAuth)
+
+/** The buyer's agent wallet: a Hedera account the remote MCP server pays from. */
+export const AgentWalletSchema = Schema.Struct({
+  accountId: Schema.String,
+  /** The EVM address to send USDC to from MetaMask. */
+  evmAddress: Schema.String,
+  /** Micro-USDC; null when the mirror node cannot say. */
+  usdcBalance: Schema.NullOr(MicrosSchema),
+});
+export type AgentWallet = typeof AgentWalletSchema.Type;
+
+/** What the consent page shows before the signed-in user approves a connector. */
+export const OAuthGrantSchema = Schema.Struct({
+  clientName: Schema.String,
+  expiresAt: Schema.Date,
+  /** The host the user is sent back to, e.g. "claude.ai". */
+  redirectHost: Schema.String,
+});
+
+/** Where to send the browser after approving or denying. */
+export const OAuthRedirectSchema = Schema.Struct({
+  redirectUrl: Schema.String,
+});
+
 // Market
 
 /** A live listing sold pay-per-request on the gateway's market route. */

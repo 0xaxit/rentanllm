@@ -8,6 +8,7 @@ export { AuthGroup } from "./groups/auth";
 export { BuyerGroup } from "./groups/buyer";
 export { CronGroup } from "./groups/cron";
 export { MarketGroup } from "./groups/market";
+export { OAuthGroup } from "./groups/oauth";
 export { OwnerGroup } from "./groups/owner";
 export { PricingGroup } from "./groups/pricing";
 export { SystemGroup } from "./groups/system";
@@ -19,6 +20,7 @@ export {
 export { CronAuth } from "./middleware/cron-auth";
 export type {
   AgentIdentity,
+  AgentWallet,
   BuyerOverview,
   BuyerPolicy,
   Listing,
@@ -35,6 +37,9 @@ export {
   AddProviderAccountRequestSchema,
   AgentIdentitySchema,
   AgentRegistrationFileSchema,
+  AgentWalletSchema,
+  OAuthGrantSchema,
+  OAuthRedirectSchema,
   LinkNodeIdentityRequestSchema,
   NodeIdentitySchema,
   ReputationReportSchema,

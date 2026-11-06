@@ -11,6 +11,7 @@ import { HttpApiBuilder } from "effect/http-api";
 import { AuthStorePg } from "./auth/auth-store";
 import { SignatureVerifierLive } from "./auth/signature-verifier";
 import { ApiConfig, ApiConfigLive } from "./config";
+import { AgentWalletChainLive } from "./hedera/agent-wallets";
 import { HederaMirrorLive } from "./hedera/mirror";
 import { AuthenticationLive } from "./http/authentication";
 import { CronAuthLive } from "./http/cron-auth";
@@ -19,9 +20,11 @@ import { AuthHandlers } from "./http/handlers/auth";
 import { BuyerHandlers } from "./http/handlers/buyer";
 import { CronHandlers } from "./http/handlers/cron";
 import { MarketHandlers } from "./http/handlers/market";
+import { OAuthHandlers } from "./http/handlers/oauth";
 import { OwnerHandlers } from "./http/handlers/owner";
 import { PricingHandlers } from "./http/handlers/pricing";
 import { SystemHandlers } from "./http/handlers/system";
+import { McpRoutes } from "./http/mcp-routes";
 import { ObservabilityLive } from "./observability";
 import { Erc8004Live } from "./reputation/erc8004";
 
@@ -34,6 +37,7 @@ export const HandlersLayer = Layer.mergeAll(
   OwnerHandlers,
   BuyerHandlers,
   AgentsHandlers,
+  OAuthHandlers,
   CronHandlers
 );
 
@@ -52,6 +56,7 @@ const CorsLayer = Layer.unwrap(
 /** Routes, middleware and handlers. Services still to be provided. */
 export const RoutesLayer = Layer.mergeAll(
   HttpApiBuilder.layer(RentAnLlmApi, { openapiPath: "/openapi.json" }),
+  McpRoutes,
   CorsLayer
 ).pipe(
   Layer.provide(HandlersLayer),
@@ -63,7 +68,8 @@ export const ServicesLive = Layer.mergeAll(
   AuthStorePg,
   SignatureVerifierLive,
   HederaMirrorLive,
-  Erc8004Live
+  Erc8004Live,
+  AgentWalletChainLive
 ).pipe(Layer.provideMerge(DbLive), Layer.provideMerge(ApiConfigLive));
 
 export const AppLive = RoutesLayer.pipe(

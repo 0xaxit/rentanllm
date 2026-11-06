@@ -25,6 +25,8 @@ export class HederaMirror extends Context.Service<
      * slot; false when a USDC transfer to it would fail; null when unknown.
      */
     readonly canReceiveUsdc: (account: string) => Effect.Effect<boolean | null>;
+    /** The account's USDC balance in micro-USDC; null when unknown. */
+    readonly usdcBalance: (account: string) => Effect.Effect<bigint | null>;
   }
 >()("@rentanllm/api/HederaMirror") {}
 
@@ -100,6 +102,20 @@ export const HederaMirrorLive = Layer.effect(HederaMirror)(
           ).length;
           return hasFreeSlot(limit, used);
         }),
+      usdcBalance: (account) =>
+        getJson<{
+          readonly tokens?: readonly { readonly balance?: unknown }[];
+        }>(
+          `/api/v1/accounts/${encodeURIComponent(account)}/tokens?token.id=${USDC_TOKEN_ID}`
+        ).pipe(
+          Effect.map((body) => {
+            if (body === null) {
+              return null;
+            }
+            const balance = body.tokens?.[0]?.balance;
+            return typeof balance === "number" ? BigInt(balance) : 0n;
+          })
+        ),
     });
   })
 );
@@ -109,6 +125,7 @@ export const hederaMirrorStub = (
   options: {
     readonly account?: string | null;
     readonly canReceive?: boolean | null;
+    readonly usdcBalance?: bigint | null;
   } = {}
 ) =>
   Layer.succeed(HederaMirror)(
@@ -120,6 +137,10 @@ export const hederaMirrorStub = (
       canReceiveUsdc: () =>
         Effect.succeed(
           options.canReceive === undefined ? true : options.canReceive
+        ),
+      usdcBalance: () =>
+        Effect.succeed(
+          options.usdcBalance === undefined ? 0n : options.usdcBalance
         ),
     })
   );
