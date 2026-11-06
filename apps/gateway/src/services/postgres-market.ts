@@ -14,7 +14,7 @@ import { Cache, Duration, Effect, Exit, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 
 import { Settings } from "../config.ts";
-import type { MarketOffer } from "../domain.ts";
+import type { BuyerPolicy, MarketOffer } from "../domain.ts";
 import { MarketStore } from "./market-store.ts";
 import { toMicros } from "./rows.ts";
 import { StoreError } from "./store-error.ts";
@@ -37,10 +37,34 @@ interface OfferRow {
   readonly wallet_address: string;
 }
 
-const isProvider = Schema.is(ProviderSchema);
-
 const nullable = (value: MicrosColumn | null) =>
   value === null ? null : toMicros(value);
+
+interface PolicyRow {
+  readonly allowed_sellers: readonly string[] | null;
+  readonly daily_budget_micros: MicrosColumn | null;
+  readonly max_per_request_micros: MicrosColumn | null;
+  readonly paused: boolean;
+  readonly per_seller_daily_micros: MicrosColumn | null;
+}
+
+interface SpendRow {
+  readonly to_seller: MicrosColumn | null;
+  readonly total: MicrosColumn | null;
+}
+
+const policyOf = (row: PolicyRow): BuyerPolicy => ({
+  allowedSellers: row.allowed_sellers,
+  dailyBudgetMicros: nullable(row.daily_budget_micros),
+  maxPerRequestMicros: nullable(row.max_per_request_micros),
+  paused: row.paused,
+  perSellerDailyMicros: nullable(row.per_seller_daily_micros),
+});
+
+const isProvider = Schema.is(ProviderSchema);
+
+const storeError = (cause: unknown) =>
+  new StoreError({ cause, store: "MarketStore" });
 
 const offerOf = (row: OfferRow): MarketOffer | null => {
   if (!isProvider(row.provider)) {
@@ -107,6 +131,30 @@ export const PostgresMarketStore = Layer.effect(MarketStore)(
     );
 
     return {
+      buyerPolicy: (payer) =>
+        sql<PolicyRow>`
+          select allowed_sellers, daily_budget_micros, max_per_request_micros,
+                 paused, per_seller_daily_micros
+          from buyer_policies
+          where payer_account = ${payer}
+        `.pipe(
+          Effect.map(([row]) => (row === undefined ? null : policyOf(row))),
+          Effect.mapError(storeError)
+        ),
+      buyerSpend: (payer, payTo, since) =>
+        sql<SpendRow>`
+          select coalesce(sum(paid_usdc_micros), 0) as total,
+                 coalesce(sum(paid_usdc_micros) filter (where pay_to = ${payTo}), 0)
+                   as to_seller
+          from paid_requests
+          where payer = ${payer} and created_at > ${since}
+        `.pipe(
+          Effect.map(([row]) => ({
+            toSellerMicros: toMicros(row?.to_seller ?? 0),
+            totalMicros: toMicros(row?.total ?? 0),
+          })),
+          Effect.mapError(storeError)
+        ),
       catalog: Cache.get(offers, ""),
       offers: (model) => Cache.get(offers, model),
       recordPaid: (record) =>

@@ -47,9 +47,18 @@ export const decodePaymentHeader = (header: string) =>
 const normalizeTransaction = (network: string, transaction: string) =>
   network.startsWith("eip155:") ? transaction.toLowerCase() : transaction;
 
-export const settleAgainst = (
+/**
+ * Runs after the facilitator verifies a payment and before it settles, with the payer it
+ * reported. Failing it refuses the payment; nothing has moved yet.
+ */
+export type BeforeSettle<E> = (
+  payer: string | null
+) => Effect.Effect<void, PaymentRejected | E>;
+
+export const settleAgainst = <E = never>(
   payload: PaymentPayload,
-  requirements: PaymentRequirements
+  requirements: PaymentRequirements,
+  beforeSettle?: BeforeSettle<E>
 ) =>
   Effect.gen(function* settlePayment() {
     const facilitator = yield* X402Facilitator;
@@ -62,6 +71,9 @@ export const settleAgainst = (
       return yield* new PaymentRejected({
         reason: verified.invalidMessage ?? verified.invalidReason ?? "invalid",
       });
+    }
+    if (beforeSettle !== undefined) {
+      yield* beforeSettle(verified.payer ?? null);
     }
     const settled = yield* facilitator.settle(payload, requirements);
     if (!settled.success || settled.transaction.length === 0) {

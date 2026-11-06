@@ -1,18 +1,34 @@
 import { Context } from "effect";
 import type { Effect } from "effect";
 
-import type { MarketOffer, PaidRequestRecord } from "../domain.ts";
+import type {
+  BuyerPolicy,
+  BuyerSpend,
+  MarketOffer,
+  PaidRequestRecord,
+} from "../domain.ts";
 import type { StoreError } from "./store-error.ts";
 
 /**
  * What the market route reads and writes: the live listings selling a model, and the
  * log of paid requests. `recordPaid` is idempotent by requestId and by paymentTx:
- * it returns false (and writes nothing) for a duplicate.
+ * it returns false (and writes nothing) for a duplicate. Buyers' spending limits and
+ * their last 24 hours of spend are read here too.
  */
 export class MarketStore extends Context.Service<
   MarketStore,
   {
     /** Every live listing, cheapest output price first. Online or not. */
+    /** The spending limits of the paying Hedera account; null when it set none. */
+    readonly buyerPolicy: (
+      payer: string
+    ) => Effect.Effect<BuyerPolicy | null, StoreError>;
+    /** What `payer` paid since `since`, in total and to `payTo`. */
+    readonly buyerSpend: (
+      payer: string,
+      payTo: string,
+      since: Date
+    ) => Effect.Effect<BuyerSpend, StoreError>;
     readonly catalog: Effect.Effect<readonly MarketOffer[], StoreError>;
     /** Live listings that sell `model`, cheapest output price first. Online or not. */
     readonly offers: (

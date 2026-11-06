@@ -6,6 +6,7 @@ import type { SqlClient } from "effect/sql/SqlClient";
 
 import { currentDate } from "../../clock";
 import { ApiConfig } from "../../config";
+import type { HederaMirror } from "../../hedera/mirror";
 import { ownerSales } from "../../services/market";
 import {
   addProviderAccount,
@@ -26,7 +27,7 @@ export const OwnerHandlers = HttpApiBuilder.group(
   "owner",
   Effect.fn(function* ownerHandlers(handlers) {
     const config = yield* ApiConfig;
-    const provide = yield* captureServices<Db | SqlClient>();
+    const provide = yield* captureServices<Db | HederaMirror | SqlClient>();
     /** Runs `f` with the signed-in owner's id and the app services. */
     const asOwner = <A, E, R>(
       f: (ownerId: string, now: Date) => Effect.Effect<A, E, R>

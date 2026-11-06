@@ -9,6 +9,8 @@ import { AuthStorePg } from "../../src/auth/auth-store";
 import { SignatureVerifierEoa } from "../../src/auth/signature-verifier";
 import { ApiConfig, makeTestConfig } from "../../src/config";
 import type { ApiConfigShape } from "../../src/config";
+import { hederaMirrorStub } from "../../src/hedera/mirror";
+import type { HederaMirror } from "../../src/hedera/mirror";
 import { makeWallet } from "./wallet";
 
 const SESSION_COOKIE_PATTERN = /rentanllm_session=(?<token>[^;]*)/u;
@@ -21,10 +23,16 @@ export interface CallOptions {
 
 export const makeTestApp = (
   url: string,
-  configOverrides: Partial<ApiConfigShape> = {}
+  configOverrides: Partial<ApiConfigShape> = {},
+  /** The Hedera mirror node; by default every wallet has an account that takes USDC. */
+  mirror: Layer.Layer<HederaMirror> = hederaMirrorStub()
 ) => {
   const config = makeTestConfig(configOverrides);
-  const services = Layer.mergeAll(AuthStorePg, SignatureVerifierEoa).pipe(
+  const services = Layer.mergeAll(
+    AuthStorePg,
+    SignatureVerifierEoa,
+    mirror
+  ).pipe(
     Layer.provideMerge(dbLayer({ maxConnections: 4, url: Redacted.make(url) })),
     Layer.provideMerge(Layer.succeed(ApiConfig)(config)),
     Layer.orDie

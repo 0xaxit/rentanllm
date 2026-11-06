@@ -6,11 +6,13 @@ import type { PaymentRequirements } from "@x402/core/types";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { MarketSettings } from "../src/config.ts";
+import type { BuyerPolicy } from "../src/domain.ts";
 import { quotedInputTokens, quotePrice } from "../src/market/quote.ts";
 import type { Seed } from "../src/services/memory.ts";
 import { HEDERA_TESTNET } from "../src/x402/chains.ts";
 import {
   FAKE_HEDERA_FEE_PAYER,
+  FAKE_PAYER,
   fakeTxHash,
   payFor,
   paymentRequiredOf,
@@ -173,6 +175,49 @@ const startMirror = async () => {
     throw new Error("mirror stub has no port");
   }
   return { mirror, url: `http://127.0.0.1:${address.port}` };
+};
+
+const NO_LIMITS: BuyerPolicy = {
+  allowedSellers: null,
+  dailyBudgetMicros: null,
+  maxPerRequestMicros: null,
+  paused: false,
+  perSellerDailyMicros: null,
+};
+
+/** Quotes, pays the cheapest seller under `policy`, and reports what happened. */
+const payUnder = async (
+  gw: RunningGateway,
+  policy: BuyerPolicy,
+  nonce: string
+) => {
+  gw.state.buyerPolicies.set(FAKE_PAYER, policy);
+  try {
+    const quoted = await chat(gw, {
+      max_tokens: 64,
+      messages: MESSAGES,
+      model: MODEL,
+    });
+    const [cheapest] = termsOf(quoted);
+    if (cheapest === undefined) {
+      throw new Error("no terms");
+    }
+    const settledBefore = gw.facilitator.calls.settle;
+    const response = await chat(
+      gw,
+      { max_tokens: 64, messages: MESSAGES, model: MODEL },
+      { "payment-signature": payFor(cheapest, nonce) }
+    );
+    const text = await response.text();
+    return {
+      amount: BigInt(cheapest.amount),
+      settled: gw.facilitator.calls.settle - settledBefore,
+      status: response.status,
+      text,
+    };
+  } finally {
+    gw.state.buyerPolicies.delete(FAKE_PAYER);
+  }
 };
 
 describe("market on Hedera testnet", () => {
@@ -339,6 +384,75 @@ describe("market on Hedera testnet", () => {
     const body = (await response.json()) as { error: { message: string } };
     expect(body.error.message).toContain("does not match any current offer");
     expect(gw.facilitator.calls.settle).toBe(settledBefore);
+  });
+
+  describe("buyer spending limits", () => {
+    it("refuses a paused buyer before anything settles", async () => {
+      const result = await payUnder(
+        gw,
+        { ...NO_LIMITS, paused: true },
+        "n-paused"
+      );
+      expect(result.status).toBe(402);
+      expect(result.text).toContain("paused all payments");
+      expect(result.settled).toBe(0);
+    });
+
+    it("refuses a seller that is not on the buyer's allowlist", async () => {
+      const result = await payUnder(
+        gw,
+        { ...NO_LIMITS, allowedSellers: [DEAR_ACCOUNT] },
+        "n-allowlist"
+      );
+      expect(result.status).toBe(402);
+      expect(result.text).toContain(`seller ${CHEAP_ACCOUNT} is not on`);
+      expect(result.settled).toBe(0);
+    });
+
+    it("refuses a payment above the buyer's per-request limit", async () => {
+      const result = await payUnder(
+        gw,
+        { ...NO_LIMITS, maxPerRequestMicros: 1n },
+        "n-per-request"
+      );
+      expect(result.status).toBe(402);
+      expect(result.text).toContain("limit per request");
+      expect(result.settled).toBe(0);
+    });
+
+    it("pays inside every limit, then stops at the 24-hour budget", async () => {
+      const first = await payUnder(
+        gw,
+        { ...NO_LIMITS, allowedSellers: [CHEAP_ACCOUNT] },
+        "n-inside"
+      );
+      expect(first.status).toBe(200);
+      expect(first.settled).toBe(1);
+      // The purchase is recorded when the answer ends.
+      await waitUntil(() => gw.state.paid.some((r) => r.payer === FAKE_PAYER));
+      const spent = gw.state.paid
+        .filter((r) => r.payer === FAKE_PAYER)
+        .reduce((sum, r) => sum + r.paidMicros, 0n);
+      const overBudget = await payUnder(
+        gw,
+        { ...NO_LIMITS, dailyBudgetMicros: spent + first.amount - 1n },
+        "n-budget"
+      );
+      expect(overBudget.status).toBe(402);
+      expect(overBudget.text).toContain("24-hour budget");
+      expect(overBudget.settled).toBe(0);
+      const spentToCheap = gw.state.paid
+        .filter((r) => r.payer === FAKE_PAYER && r.payTo === CHEAP_ACCOUNT)
+        .reduce((sum, r) => sum + r.paidMicros, 0n);
+      const overSeller = await payUnder(
+        gw,
+        { ...NO_LIMITS, perSellerDailyMicros: spentToCheap },
+        "n-seller"
+      );
+      expect(overSeller.status).toBe(402);
+      expect(overSeller.text).toContain(`for seller ${CHEAP_ACCOUNT}`);
+      expect(overSeller.settled).toBe(0);
+    });
   });
 
   it("refuses a payment the facilitator rejects", async () => {

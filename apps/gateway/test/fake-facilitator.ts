@@ -35,6 +35,9 @@ const nonceOf = (payload: Record<string, unknown>) => {
 export const fakeTxHash = (nonce: string) =>
   `0x${createHash("sha256").update(nonce).digest("hex")}`;
 
+/** The payer every fake payment reports, at verify and at settle, like a real facilitator. */
+export const FAKE_PAYER = "0x00000000000000000000000000000000000000aa";
+
 export const makeFakeFacilitator = (): FakeFacilitator => {
   const calls = { settle: 0, verify: 0 };
   const layer = Layer.succeed(X402Facilitator)({
@@ -45,7 +48,7 @@ export const makeFakeFacilitator = (): FakeFacilitator => {
         return {
           amount: requirements.amount,
           network: requirements.network,
-          payer: "0x00000000000000000000000000000000000000aa",
+          payer: FAKE_PAYER,
           success: true,
           transaction: fakeTxHash(nonceOf(payload.payload)),
         };
@@ -58,7 +61,7 @@ export const makeFakeFacilitator = (): FakeFacilitator => {
       Effect.sync(() => {
         calls.verify += 1;
         return signatureOf(payload.payload) === VALID_SIGNATURE
-          ? { isValid: true }
+          ? { isValid: true, payer: FAKE_PAYER }
           : {
               invalidReason: "invalid_exact_evm_payload_signature",
               isValid: false,

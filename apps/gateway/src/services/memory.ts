@@ -8,6 +8,7 @@ import { ProviderSchema } from "@rentanllm/protocol";
 import { Effect, Layer, Schema } from "effect";
 
 import type {
+  BuyerPolicy,
   MarketOffer,
   MeterReading,
   NodeRecord,
@@ -66,6 +67,8 @@ export type Seed = typeof SeedSchema.Type;
 
 /** All mutable state behind the in-memory stores. Exposed so tests can inspect it. */
 export interface MemoryState {
+  /** Buyers' spending limits, keyed by paying Hedera account. */
+  readonly buyerPolicies: Map<string, BuyerPolicy>;
   /** Requests in flight per slot key. */
   readonly inFlight: Map<string, number>;
   /** Keyed by `${nodeId}:${provider}`. */
@@ -101,6 +104,7 @@ export const makeMemoryState = (seed: Seed): MemoryState => {
     });
   }
   return {
+    buyerPolicies: new Map(),
     inFlight: new Map(),
     meters: new Map(),
     nodes,
@@ -154,6 +158,22 @@ export const memoryRateLimiterLayer = (state: MemoryState) =>
 export const memoryStoresLayer = (state: MemoryState) =>
   Layer.mergeAll(
     Layer.succeed(MarketStore)({
+      buyerPolicy: (payer) =>
+        Effect.sync(() => state.buyerPolicies.get(payer) ?? null),
+      buyerSpend: (payer, payTo, since) =>
+        Effect.sync(() => {
+          let totalMicros = 0n;
+          let toSellerMicros = 0n;
+          for (const r of state.paid) {
+            if (r.payer === payer && r.finishedAt > since) {
+              totalMicros += r.paidMicros;
+              if (r.payTo === payTo) {
+                toSellerMicros += r.paidMicros;
+              }
+            }
+          }
+          return { toSellerMicros, totalMicros };
+        }),
       catalog: Effect.sync(() =>
         state.offers.toSorted((a, b) =>
           a.prices.outputPerMtok < b.prices.outputPerMtok ? -1 : 1

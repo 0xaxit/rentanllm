@@ -17,6 +17,7 @@ import { Effect } from "effect";
 
 import { newNodeToken } from "../crypto";
 import { dieOnDbError } from "../db-errors";
+import { HederaMirror, USDC_TOKEN_ID } from "../hedera/mirror";
 import { toListing, toNode, toProviderAccount } from "./mappers";
 import { requireKnownModels } from "./pricing";
 import { computeUptime, WEEK_MS } from "./uptime";
@@ -259,6 +260,37 @@ const listingPatch = (input: ListingInput): Partial<ListingRow> => {
   return patch;
 };
 
+/**
+ * Going live needs a Hedera account behind the seller's wallet that can receive USDC;
+ * otherwise every buyer's payment to it would fail at settlement. A mirror node that
+ * cannot say whether the account can receive USDC does not block.
+ */
+const requireSellerCanReceiveUsdc = Effect.fn(
+  "owner.requireSellerCanReceiveUsdc"
+)(function* requireSellerCanReceiveUsdcGen(ownerId: string) {
+  const db = yield* Db;
+  const mirror = yield* HederaMirror;
+  const [owner] = yield* db
+    .select({ wallet: users.walletAddress })
+    .from(users)
+    .where(eq(users.id, ownerId));
+  const account =
+    owner?.wallet === null || owner?.wallet === undefined
+      ? null
+      : yield* mirror.accountFor(owner.wallet);
+  if (account === null) {
+    return yield* new InvalidRequest({
+      message:
+        "Your sign-in wallet has no Hedera account yet, so buyers cannot pay you. Fund it once on Hedera testnet, then go live.",
+    });
+  }
+  if ((yield* mirror.canReceiveUsdc(account)) === false) {
+    return yield* new InvalidRequest({
+      message: `Your Hedera account ${account} cannot receive USDC yet. Associate it with token ${USDC_TOKEN_ID} once (a one-time Hedera transaction), then go live.`,
+    });
+  }
+}, dieOnDbError);
+
 export const createListing = Effect.fn("owner.createListing")(
   function* createListingGen(
     ownerId: string,
@@ -284,6 +316,9 @@ export const createListing = Effect.fn("owner.createListing")(
       return yield* new NotFound({ message: "Provider account not found" });
     }
     yield* requireKnownModels(account.provider, input.models);
+    if (input.status === "live") {
+      yield* requireSellerCanReceiveUsdc(ownerId);
+    }
     const [row] = yield* db
       .insert(listings)
       .values({
@@ -313,6 +348,9 @@ export const updateListing = Effect.fn("owner.updateListing")(
     if (input.models !== undefined) {
       yield* requireKnownModels(listing.provider, input.models);
     }
+    if (input.status === "live" && listing.status !== "live") {
+      yield* requireSellerCanReceiveUsdc(ownerId);
+    }
     const patch = listingPatch(input);
     if (Object.keys(patch).length > 0) {
       yield* db.update(listings).set(patch).where(eq(listings.id, listingId));
@@ -324,7 +362,7 @@ export const updateListing = Effect.fn("owner.updateListing")(
 
 export const pauseListing = (ownerId: string, listingId: string) =>
   updateListing(ownerId, listingId, { status: "paused" }).pipe(
-    // Only a models change is validated, and pausing changes none.
+    // Only a models change or going live is validated, and pausing is neither.
     Effect.catchTag("InvalidRequest", Effect.die)
   );
 

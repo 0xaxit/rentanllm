@@ -70,3 +70,21 @@ export interface PaidRequestRecord {
   /** What the usage cost at the listing's prices. */
   readonly usedMicros: Micros;
 }
+
+/**
+ * A buyer's spending limits (the `buyer_policies` row for the paying Hedera account).
+ * Null limits mean "no limit"; `allowedSellers` null means any seller.
+ */
+export interface BuyerPolicy {
+  readonly allowedSellers: readonly string[] | null;
+  readonly dailyBudgetMicros: Micros | null;
+  readonly maxPerRequestMicros: Micros | null;
+  readonly paused: boolean;
+  readonly perSellerDailyMicros: Micros | null;
+}
+
+/** What one payer has paid in the last 24 hours: in total, and to one seller. */
+export interface BuyerSpend {
+  readonly toSellerMicros: Micros;
+  readonly totalMicros: Micros;
+}

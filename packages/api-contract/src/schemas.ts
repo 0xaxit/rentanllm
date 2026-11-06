@@ -340,3 +340,59 @@ export const OwnerDashboardSchema = Schema.Struct({
 export const CronTickResultSchema = Schema.Struct({
   nodesMarkedOffline: Schema.Number,
 });
+
+// Buyer: spending limits the gateway enforces before a payment settles
+
+/** A Hedera account id, e.g. "0.0.11331176". */
+export const HederaAccountSchema = Schema.String.check(
+  Schema.isPattern(/^\d+\.\d+\.\d+$/u)
+);
+
+const PositiveMicrosSchema = Schema.BigInt.check(
+  Schema.isGreaterThanBigInt(0n)
+);
+
+/** Null limits mean "no limit"; `allowedSellers` null means any seller. */
+export const BuyerPolicySchema = Schema.Struct({
+  /** Sellers (Hedera accounts) this buyer may pay. */
+  allowedSellers: Schema.NullOr(Schema.Array(HederaAccountSchema)),
+  /** Most paid in any rolling 24 hours, across all sellers (USDC micros). */
+  dailyBudgetUsdc: Schema.NullOr(PositiveMicrosSchema),
+  /** Largest single payment (USDC micros). */
+  maxPerRequestUsdc: Schema.NullOr(PositiveMicrosSchema),
+  /** True refuses every payment. */
+  paused: Schema.Boolean,
+  /** Most paid to any one seller in any rolling 24 hours (USDC micros). */
+  perSellerDailyUsdc: Schema.NullOr(PositiveMicrosSchema),
+});
+export type BuyerPolicy = typeof BuyerPolicySchema.Type;
+
+export const UpdateBuyerPolicyRequestSchema = Schema.Struct({
+  allowedSellers: Schema.NullOr(
+    Schema.Array(HederaAccountSchema).check(Schema.isMaxLength(50))
+  ),
+  dailyBudgetUsdc: Schema.NullOr(PositiveMicrosSchema),
+  maxPerRequestUsdc: Schema.NullOr(PositiveMicrosSchema),
+  paused: Schema.Boolean,
+  perSellerDailyUsdc: Schema.NullOr(PositiveMicrosSchema),
+});
+
+export const BuyerSellerSpendSchema = Schema.Struct({
+  paidUsdc: MicrosSchema,
+  payTo: Schema.String,
+  requests: Schema.Int,
+});
+
+export const BuyerOverviewSchema = Schema.Struct({
+  /** The Hedera account behind the sign-in wallet; null when it has none yet. */
+  account: Schema.NullOr(Schema.String),
+  /** Paid in the last 24 hours, per seller, biggest first. */
+  bySeller: Schema.Array(BuyerSellerSpendSchema),
+  /** Null until the buyer saves limits; the gateway then applies none. */
+  policy: Schema.NullOr(BuyerPolicySchema),
+  /** Newest first, at most 25. */
+  recent: Schema.Array(PaidRequestSchema),
+  /** Paid in the last 24 hours, all sellers. */
+  spentLast24hUsdc: MicrosSchema,
+});
+export type BuyerOverview = typeof BuyerOverviewSchema.Type;

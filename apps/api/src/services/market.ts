@@ -82,7 +82,7 @@ export const marketOffers = Effect.fn("market.offers")(function* offersGen() {
 
 type PaidRow = typeof paidRequests.$inferSelect;
 
-const toPaidRequest = (row: PaidRow): PaidRequest => ({
+export const toPaidRequest = (row: PaidRow): PaidRequest => ({
   createdAt: row.createdAt,
   httpStatus: row.httpStatus,
   inputTokens: row.inputTokens,

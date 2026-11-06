@@ -39,6 +39,7 @@ import type { Finished } from "../proxy.ts";
 import { MarketStore } from "../services/market-store.ts";
 import { RateLimiter } from "../services/rate-limiter.ts";
 import { TunnelHub } from "../tunnel/tunnel-hub.ts";
+import { PaymentRejected } from "../x402/payment-rejected.ts";
 import { mismatch, X402_VERSION } from "../x402/requirements.ts";
 import { decodePaymentHeader, settleAgainst } from "../x402/settle.ts";
 import type { Settlement } from "../x402/settle.ts";
@@ -49,6 +50,7 @@ import {
   warnOnTokenMismatch,
 } from "./accounting.ts";
 import { ArkivMirror } from "./arkiv-mirror.ts";
+import { policyRefusal } from "./buyer-policy.ts";
 import {
   parseChatBody,
   quotedInputTokens,
@@ -67,6 +69,8 @@ interface Quote {
   readonly requirements: PaymentRequirements;
 }
 
+/** Buyers' budgets and per-seller limits cover this rolling window. */
+const BUYER_WINDOW_MS = 24 * 60 * 60 * 1000;
 const servesChat = (offer: MarketOffer) =>
   ALLOWED_PATHS[offer.provider].includes(CHAT_COMPLETIONS_PATH);
 
@@ -274,7 +278,29 @@ export const handleChatCompletions = Effect.gen(function* handleChat() {
     });
   }
 
-  const settled = yield* settleAgainst(payload, quote.requirements).pipe(
+  const store = yield* MarketStore;
+  const checkBuyer = (payer: string | null) =>
+    Effect.gen(function* checkBuyerPolicy() {
+      if (payer === null) {
+        return;
+      }
+      const policy = yield* store.buyerPolicy(payer);
+      if (policy === null) {
+        return;
+      }
+      const since = new Date(Date.now() - BUYER_WINDOW_MS);
+      const { payTo } = quote.requirements;
+      const spend = yield* store.buyerSpend(payer, payTo, since);
+      const refusal = policyRefusal(policy, spend, payTo, quote.amountMicros);
+      if (refusal !== null) {
+        return yield* new PaymentRejected({ reason: refusal });
+      }
+    });
+  const settled = yield* settleAgainst(
+    payload,
+    quote.requirements,
+    checkBuyer
+  ).pipe(
     Effect.catchTag("PaymentRejected", (rejected) =>
       Effect.fail(refuse(rejected.reason))
     )
@@ -300,7 +326,7 @@ export const handleChatCompletions = Effect.gen(function* handleChat() {
     path: CHAT_COMPLETIONS_PATH,
     provider: offer.provider,
     record: recordPaid(
-      yield* MarketStore,
+      store,
       yield* ArkivMirror,
       quote,
       body,

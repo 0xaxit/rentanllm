@@ -11,9 +11,11 @@ import { HttpApiBuilder } from "effect/http-api";
 import { AuthStorePg } from "./auth/auth-store";
 import { SignatureVerifierLive } from "./auth/signature-verifier";
 import { ApiConfig, ApiConfigLive } from "./config";
+import { HederaMirrorLive } from "./hedera/mirror";
 import { AuthenticationLive } from "./http/authentication";
 import { CronAuthLive } from "./http/cron-auth";
 import { AuthHandlers } from "./http/handlers/auth";
+import { BuyerHandlers } from "./http/handlers/buyer";
 import { CronHandlers } from "./http/handlers/cron";
 import { MarketHandlers } from "./http/handlers/market";
 import { OwnerHandlers } from "./http/handlers/owner";
@@ -28,6 +30,7 @@ export const HandlersLayer = Layer.mergeAll(
   PricingHandlers,
   MarketHandlers,
   OwnerHandlers,
+  BuyerHandlers,
   CronHandlers
 );
 
@@ -36,7 +39,7 @@ const CorsLayer = Layer.unwrap(
   Effect.map(Effect.service(ApiConfig), (config) =>
     HttpRouter.cors({
       allowedHeaders: ["content-type", "authorization"],
-      allowedMethods: ["GET", "POST", "PATCH", "OPTIONS"],
+      allowedMethods: ["GET", "POST", "PUT", "PATCH", "OPTIONS"],
       allowedOrigins: config.webOrigins,
       credentials: true,
     })
@@ -52,10 +55,11 @@ export const RoutesLayer = Layer.mergeAll(
   Layer.provide([AuthenticationLive, CronAuthLive])
 );
 
-/** Production services: Postgres (DATABASE_URL), SIWE verification, env config. */
+/** Production services: Postgres (DATABASE_URL), SIWE verification, the Hedera mirror node, env config. */
 export const ServicesLive = Layer.mergeAll(
   AuthStorePg,
-  SignatureVerifierLive
+  SignatureVerifierLive,
+  HederaMirrorLive
 ).pipe(Layer.provideMerge(DbLive), Layer.provideMerge(ApiConfigLive));
 
 export const AppLive = RoutesLayer.pipe(

@@ -247,6 +247,8 @@ export const paidRequests = pgTable(
   (t) => [
     index("paid_requests_created_at_idx").on(t.createdAt),
     index("paid_requests_owner_id_created_at_idx").on(t.ownerId, t.createdAt),
+    // Buyer budgets: what one payer spent in the last 24 hours, in total and per seller.
+    index("paid_requests_payer_created_at_idx").on(t.payer, t.createdAt),
     check("paid_requests_paid_positive", sql`${t.paidUsdcMicros} > 0`),
   ]
 );
@@ -295,5 +297,39 @@ export const sessions = pgTable(
   (t) => [
     index("sessions_user_id_idx").on(t.userId),
     index("sessions_expires_at_idx").on(t.expiresAt),
+  ]
+);
+
+/**
+ * A buyer's spending limits, enforced by the gateway after the facilitator verifies a
+ * payment and before it settles: a payment over a limit is refused and nothing moves.
+ * Keyed by the paying Hedera account (`paid_requests.payer`), which the API resolves from
+ * the buyer's sign-in wallet. Null limits mean "no limit". Written by the API.
+ */
+export const buyerPolicies = pgTable(
+  "buyer_policies",
+  {
+    /** Sellers (Hedera accounts) this buyer may pay; null means any seller. */
+    allowedSellers: text("allowed_sellers").array(),
+    /** Most this buyer pays in any rolling 24 hours, across all sellers. */
+    dailyBudgetMicros: micros("daily_budget_micros"),
+    /** Largest single payment. */
+    maxPerRequestMicros: micros("max_per_request_micros"),
+    /** True stops every payment from this account. */
+    paused: boolean("paused").notNull().default(false),
+    /** The paying Hedera account, e.g. "0.0.11331175". */
+    payerAccount: text("payer_account").notNull().unique(),
+    /** Most this buyer pays one seller in any rolling 24 hours. */
+    perSellerDailyMicros: micros("per_seller_daily_micros"),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    userId: uuid("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    check(
+      "buyer_policies_limits_positive",
+      sql`coalesce(${t.dailyBudgetMicros}, 1) > 0 and coalesce(${t.maxPerRequestMicros}, 1) > 0 and coalesce(${t.perSellerDailyMicros}, 1) > 0`
+    ),
   ]
 );
