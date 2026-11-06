@@ -20,7 +20,7 @@ import type { Micros } from "@rentanllm/core";
 import { ALLOWED_PATHS } from "@rentanllm/protocol";
 import { encodePaymentResponseHeader } from "@x402/core/http";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
-import { Effect } from "effect";
+import { Effect, Semaphore } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { Settings } from "../config.ts";
@@ -125,6 +125,25 @@ interface Quote {
   readonly offer: MarketOffer;
   readonly requirements: PaymentRequirements;
 }
+
+/**
+ * Settle no later than this after verifying. The buyer signs a Hedera transfer that lapses
+ * 120 s after signing, and the 402 round trip already used some of that.
+ */
+const SETTLE_DEADLINE = "75 seconds";
+
+const payerLocks = new Map<string, Semaphore.Semaphore>();
+
+/** The lock that keeps one buyer to one unsettled payment at a time. */
+const payerLock = (payer: string): Semaphore.Semaphore => {
+  const existing = payerLocks.get(payer);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const lock = Semaphore.makeUnsafe(1);
+  payerLocks.set(payer, lock);
+  return lock;
+};
 
 /** Buyers' budgets and per-seller limits cover this rolling window. */
 const BUYER_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -375,15 +394,36 @@ const handleMarket = <E, R>(
       });
     // Check the payment now, but only take it once the seller has answered: a seller
     // that fails or errors before sending anything costs the buyer nothing.
-    const verified = yield* verifyAgainst(
-      payload,
-      quote.requirements,
-      checkBuyer
-    ).pipe(
+    const verify = verifyAgainst(payload, quote.requirements, checkBuyer).pipe(
       Effect.catchTag("PaymentRejected", (rejected) =>
         Effect.fail(refuse(rejected.reason))
       )
     );
+    let verified = yield* verify;
+
+    // One unsettled payment per buyer at a time, so two jobs never run on a balance that
+    // covers one: a later request waits until the earlier one has paid its seller, then
+    // checks the payment again against what is left.
+    let releasePayer: Effect.Effect<unknown> = Effect.void;
+    const lock = verified.payer === null ? null : payerLock(verified.payer);
+    if (lock !== null) {
+      const waited = !(yield* lock.takeIfAvailable(1));
+      if (waited) {
+        yield* lock.take(1);
+      }
+      let held = true;
+      releasePayer = Effect.suspend(() => {
+        if (!held) {
+          return Effect.void;
+        }
+        held = false;
+        return lock.release(1);
+      });
+      yield* Effect.addFinalizer(() => releasePayer);
+      if (waited) {
+        verified = yield* verify;
+      }
+    }
     const requestId = `req_${randomUUID().replaceAll("-", "")}`;
     yield* Effect.annotateCurrentSpan({
       listingId: offer.listingId,
@@ -396,20 +436,35 @@ const handleMarket = <E, R>(
       "payment-response": encodePaymentResponseHeader(settlement.settle),
       "x-rentanllm-paid-usdc": formatUsdc(quote.amountMicros),
     });
+    // Settles at most once, whichever comes first: the seller's answer or the deadline.
+    // Uninterruptible, so a buyer hanging up mid-settlement cannot lose the receipt.
+    const settleOnce = yield* Effect.cached(
+      settleVerified(payload, quote.requirements, verified.payer).pipe(
+        Effect.provideService(X402Facilitator, facilitator),
+        Effect.tap((settlement) =>
+          Effect.sync(() => {
+            settled = settlement;
+          }).pipe(
+            Effect.andThen(
+              Effect.annotateCurrentSpan({ tx: settlement.transaction })
+            )
+          )
+        ),
+        Effect.ensuring(Effect.suspend(() => releasePayer)),
+        Effect.uninterruptible
+      )
+    );
+    // The buyer's signed Hedera transfer expires 120 s after signing. A job still running
+    // near then is paid before the transfer can lapse, so a slow seller is never unpaid.
+    yield* Effect.sleep(SETTLE_DEADLINE).pipe(
+      Effect.andThen(settleOnce),
+      Effect.ignore,
+      Effect.forkScoped
+    );
     const settleOnSuccess = (status: number) =>
       status >= HTTP_ERROR
         ? Effect.succeed({})
-        : settleVerified(payload, quote.requirements, verified.payer).pipe(
-            Effect.provideService(X402Facilitator, facilitator),
-            Effect.tap((settlement) =>
-              Effect.sync(() => {
-                settled = settlement;
-              }).pipe(
-                Effect.andThen(
-                  Effect.annotateCurrentSpan({ tx: settlement.transaction })
-                )
-              )
-            ),
+        : settleOnce.pipe(
             Effect.map(receiptFor),
             Effect.catchTag("PaymentRejected", (rejected) =>
               Effect.fail(
