@@ -24,6 +24,63 @@ An inference market for AI agents. People sell open models running on their own 
 
 Run everything locally with `bun dev` (Postgres and Redis in Docker; web on :3000, API on :8788, gateway on :8787).
 
+## Payments on Hedera (x402)
+
+Every paid request settles as one USDC transfer on Hedera testnet, straight from the agent's account to the seller's. The gateway never holds the money.
+
+| | |
+| --- | --- |
+| Endpoint | `POST https://gw.31-97-230-118.sslip.io/v1/chat/completions` (OpenAI-compatible; `GET /v1/models` lists what is for sale) |
+| Network | `hedera:testnet` (x402 v2, scheme `exact`) |
+| Asset | Circle's testnet USDC, HTS token [`0.0.429274`](https://hashscan.io/testnet/token/0.0.429274) (6 decimals) |
+| Facilitator | [x402.org](https://x402.org/facilitator). Its account `0.0.9185802` submits the transfer and pays the HBAR fee, so agents need only USDC |
+
+### Payment flow
+
+```
+agent                         gateway                      facilitator           Hedera
+  │ POST /v1/chat/completions    │                              │                     │
+  │─────────────────────────────▶│ prices prompt + max_tokens   │                     │
+  │◀───── 402 PAYMENT-REQUIRED ──│ payTo = seller 0.0.x          │                     │
+  │ signs a USDC TransferTransaction (buyer → seller)            │                     │
+  │ POST again + PAYMENT-SIGNATURE                               │                     │
+  │─────────────────────────────▶│ checks amount/payTo/asset     │                     │
+  │                              │──── verify, settle ─────────▶│── submits transfer ─▶│
+  │                              │◀──────── transaction id ─────│◀──── SUCCESS ────────│
+  │                              │ tunnels the prompt to the seller's Ollama node       │
+  │◀── answer + PAYMENT-RESPONSE (receipt with the transaction id) ─│                    │
+```
+
+1. The gateway answers an unpaid request with `402` and x402 terms: amount (micro-USDC), `payTo` (the seller's Hedera account), the asset and the facilitator's `feePayer`.
+2. The agent signs a Hedera `TransferTransaction` moving exactly that amount of USDC to the seller, and retries with it in the `PAYMENT-SIGNATURE` header.
+3. The gateway checks that the payment matches its terms, then has the facilitator verify and settle it on Hedera.
+4. Only after settlement is the prompt sent to the seller's node. The answer comes back with a `PAYMENT-RESPONSE` receipt carrying the Hedera transaction id.
+
+### An agent paying with no human in the loop
+
+`apps/mcp` includes an autonomous buyer (`rentanllm-mcp agent`). It finds the model on the market, reads the 402, checks its spending caps (per request and per 24 hours), signs the payment and prints the answer. Nobody approves anything:
+
+```sh
+bun install
+cd apps/mcp
+RENTANLLM_GATEWAY_URL=https://gw.31-97-230-118.sslip.io \
+RENTANLLM_MCP_ACCOUNT=<your 0.0.x account> \
+RENTANLLM_MCP_APPROVAL=none \
+RENTANLLM_MCP_KEY_FILE=<file with its ECDSA private key> \
+bun src/main.ts agent --max-tokens 64 "In one sentence, what is Hedera?"
+```
+
+The paying account needs testnet USDC (https://faucet.circle.com, Hedera Testnet) and must be associated with `0.0.429274`. It needs no HBAR for payments.
+
+### A settled payment
+
+One run of the command above, on 6 Nov 2026:
+
+- **Transaction:** [`0.0.9185802@1793922799.072231068`](https://hashscan.io/testnet/transaction/0.0.9185802%401793922799.072231068) (`SUCCESS`)
+- **Transfer:** 0.000014 USDC from the agent `0.0.11331175` to the seller `0.0.11331176`
+- **Fee:** paid in HBAR by the facilitator `0.0.9185802`
+- **Answer:** 19 prompt tokens and 40 answer tokens from `llama3.1:8b`, served from the seller's own machine
+
 ## Arkiv
 
 The gateway writes the live offers and one receipt per paid request to Arkiv's Rabdi testnet. The market page reads them back from Arkiv. See [`arkiv/`](arkiv/) for the schema and how each part is used.
