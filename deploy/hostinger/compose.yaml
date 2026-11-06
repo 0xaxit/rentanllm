@@ -39,6 +39,9 @@ services:
       FARO_ALLOWED_ORIGIN: ${FARO_ALLOWED_ORIGIN:?set FARO_ALLOWED_ORIGIN in .env}
       # "http://" behind an existing TLS proxy (compose.traefik.yaml); empty otherwise.
       SITE_SCHEME: ${CADDY_SITE_SCHEME:-}
+      # Optional older host names served alongside the new ones after a domain move.
+      LEGACY_GW_SITE: ${LEGACY_GW_SITE:-}
+      LEGACY_OTEL_SITE: ${LEGACY_OTEL_SITE:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

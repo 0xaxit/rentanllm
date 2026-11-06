@@ -119,7 +119,7 @@ const explain = (error: unknown) =>
     ? error.message
     : `unexpected failure: ${String(error)}`;
 
-const WEBSITE = "https://rentanllm.vercel.app";
+const WEBSITE = "https://rentanllm.xyz";
 
 const hashscanTx = (tx: string) =>
   `https://hashscan.io/testnet/transaction/${encodeURIComponent(tx)}`;

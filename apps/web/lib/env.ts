@@ -7,7 +7,7 @@ const trimSlash = (url: string): string => url.replace(/\/+$/u, "");
 
 const DEFAULT_API_ORIGIN = "http://localhost:8788";
 const DEFAULT_GATEWAY_URL = "http://localhost:8787";
-const DEFAULT_SITE_URL = "https://rentanllm.vercel.app";
+const DEFAULT_SITE_URL = "https://rentanllm.xyz";
 
 /**
  * Where the browser reaches the control-plane API: same origin, under /api.
@@ -34,7 +34,7 @@ export const apiBaseUrl = (): string =>
     ? SERVER_API_URL
     : `${window.location.origin}${API_PROXY_PATH}`;
 
-/** Gateway (apps/gateway), e.g. https://gw.203-0-113-7.sslip.io. */
+/** Gateway (apps/gateway), e.g. https://gw.rentanllm.xyz. */
 export const GATEWAY_URL = trimSlash(
   process.env.NEXT_PUBLIC_GATEWAY_URL?.trim() || DEFAULT_GATEWAY_URL
 );
@@ -60,8 +60,7 @@ export const HCS_AUDIT_TOPIC_ID =
 
 /** The hosted MCP server Claude Desktop connects to (a custom connector URL). */
 export const MCP_URL = trimSlash(
-  process.env.NEXT_PUBLIC_MCP_URL?.trim() ||
-    "https://rentanllm-api.vercel.app/mcp"
+  process.env.NEXT_PUBLIC_MCP_URL?.trim() || "https://api.rentanllm.xyz/mcp"
 );
 
 /** Circle's testnet USDC (HTS 0.0.429274) through its ERC-20 facade on Hedera's EVM. */

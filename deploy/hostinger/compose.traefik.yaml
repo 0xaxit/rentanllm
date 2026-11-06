@@ -15,7 +15,9 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: ${TRAEFIK_NETWORK:-root_default}
-      traefik.http.routers.rentanllm.rule: Host(`gw.${DOMAIN}`) || Host(`otel.${DOMAIN}`) || Host(`grafana.${DOMAIN}`)
+      # TRAEFIK_LEGACY_RULE (optional) keeps older names routed after a domain move,
+      # e.g. || Host(`gw.31-97-230-118.sslip.io`) || Host(`otel.31-97-230-118.sslip.io`)
+      traefik.http.routers.rentanllm.rule: Host(`gw.${DOMAIN}`) || Host(`otel.${DOMAIN}`) || Host(`grafana.${DOMAIN}`) ${TRAEFIK_LEGACY_RULE:-}
       traefik.http.routers.rentanllm.entrypoints: websecure
       traefik.http.routers.rentanllm.tls: "true"
       traefik.http.routers.rentanllm.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-mytlschallenge}

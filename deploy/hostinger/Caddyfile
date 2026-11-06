@@ -27,7 +27,10 @@
 }
 
 # Renter API (/v1/messages, SSE) and the owner-node WebSocket (/tunnel).
-{$SITE_SCHEME}gw.{$DOMAIN} {
+# LEGACY_GW_SITE (optional) also serves an older name, e.g. gw.31-97-230-118.sslip.io,
+# so seller nodes and agents configured before a domain move keep working. Behind
+# Traefik, give it the http:// scheme too (and see TRAEFIK_LEGACY_RULE).
+{$SITE_SCHEME}gw.{$DOMAIN} {$LEGACY_GW_SITE} {
 	import security_headers
 
 	request_body {
@@ -53,7 +56,7 @@
 
 # OTLP/HTTP ingest for Vercel functions (bearer token, only the three OTLP paths)
 # and Faro browser telemetry at /collect (no token: browsers cannot keep one).
-{$SITE_SCHEME}otel.{$DOMAIN} {
+{$SITE_SCHEME}otel.{$DOMAIN} {$LEGACY_OTEL_SITE} {
 	import security_headers
 
 	request_body {

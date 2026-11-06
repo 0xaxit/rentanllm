@@ -71,5 +71,5 @@ cat <<'EOF'
 Next: register a node in the RentAnLLM console to get its id and token, then
   export RENTANLLM_NODE_ID=<node id>
   export RENTANLLM_NODE_TOKEN=rn_node_...
-  ral start --gateway wss://gw.31-97-230-118.sslip.io/tunnel --ollama-model llama3.1:8b
+  ral start --gateway wss://gw.rentanllm.xyz/tunnel --ollama-model llama3.1:8b
 EOF

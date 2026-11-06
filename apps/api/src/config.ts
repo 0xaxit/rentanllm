@@ -1,7 +1,7 @@
 import { Config, Context, Effect, Layer, Option, Redacted } from "effect";
 
 export interface ApiConfigShape {
-  /** Domain attribute for the session cookie, e.g. ".rentanllm.xyz" with a custom domain. Unset (current rentanllm.vercel.app setup): host-only. */
+  /** Domain attribute for the session cookie, e.g. ".rentanllm.xyz". Unset: host-only (the web app proxies /api, so it needs none). */
   readonly cookieDomain: string | undefined;
   readonly cronSecret: Redacted.Redacted;
   /** The gateway's public origin, the endpoint agents' registration files point buyers to. */
@@ -14,7 +14,7 @@ export interface ApiConfigShape {
   /** Key for HMAC-SHA256 of session tokens before they are stored. */
   readonly sessionSecret: Redacted.Redacted;
   readonly sessionTtlMs: number;
-  /** EIP-4361 `domain` the SIWE message must carry, e.g. "rentanllm.vercel.app". */
+  /** EIP-4361 `domain` the SIWE message must carry, e.g. "rentanllm.xyz". */
   readonly siweDomain: string;
   /** Browser origins allowed to call the API with credentials (CORS). */
   readonly webOrigins: readonly string[];
@@ -30,8 +30,8 @@ const DEFAULT_SESSION_TTL_HOURS = 168;
 const DEFAULT_NONCE_TTL_SECONDS = 600;
 const DEFAULT_NODE_STALE_SECONDS = 90;
 const MIN_SECRET_LENGTH = 32;
-const DEFAULT_PUBLIC_URL = "https://rentanllm-api.vercel.app";
-const DEFAULT_GATEWAY_URL = "https://gw.31-97-230-118.sslip.io";
+const DEFAULT_PUBLIC_URL = "https://api.rentanllm.xyz";
+const DEFAULT_GATEWAY_URL = "https://gw.rentanllm.xyz";
 
 const publicOrigin = (name: string, fallback: string) =>
   Config.String(name).pipe(

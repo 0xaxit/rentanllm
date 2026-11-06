@@ -43,7 +43,7 @@ In Claude Desktop, allow `buy_inference` and leave `approve_payment` on **Always
       "command": "bun",
       "args": ["/path/to/rentanllm/apps/mcp/src/main.ts"],
       "env": {
-        "RENTANLLM_GATEWAY_URL": "https://gw.31-97-230-118.sslip.io",
+        "RENTANLLM_GATEWAY_URL": "https://gw.rentanllm.xyz",
         "RENTANLLM_MCP_ACCOUNT": "0.0.12345",
         "RENTANLLM_MCP_APPROVAL": "threshold",
         "RENTANLLM_MCP_AUTO_APPROVE_USDC": "0.001",
@@ -68,7 +68,7 @@ In Claude Desktop, allow `buy_inference` and leave `approve_payment` on **Always
 The caps are the only limit, so it needs approval off and a key file:
 
 ```sh
-RENTANLLM_GATEWAY_URL=https://gw.31-97-230-118.sslip.io \
+RENTANLLM_GATEWAY_URL=https://gw.rentanllm.xyz \
 RENTANLLM_MCP_ACCOUNT=0.0.11331175 \
 RENTANLLM_MCP_APPROVAL=none \
 RENTANLLM_MCP_KEY_FILE=~/.config/rentanllm/wallets/buyer.json \
@@ -83,7 +83,7 @@ Payments go into the same `spend.jsonl` as the MCP server's, so both count again
 
 ```sh
 # 1. Ask without paying: the 402 carries a payment-required header
-curl -i https://gw.31-97-230-118.sslip.io/v1/chat/completions \
+curl -i https://gw.rentanllm.xyz/v1/chat/completions \
   -H "content-type: application/json" \
   -d '{"model":"llama3.1:8b","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
 
@@ -93,7 +93,7 @@ RENTANLLM_MCP_KEY_FILE=~/.config/rentanllm/wallets/buyer.json \
 bun src/main.ts sign-payment 'eyJhY2NlcHRz...'
 
 # 3. Send the same request again with the signature
-curl -i https://gw.31-97-230-118.sslip.io/v1/chat/completions \
+curl -i https://gw.rentanllm.xyz/v1/chat/completions \
   -H "content-type: application/json" \
   -H "payment-signature: <output of step 2>" \
   -d '{"model":"llama3.1:8b","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'

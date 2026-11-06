@@ -8,11 +8,11 @@ Control-plane API for the open-model market: wallet sign-in, sellers' nodes and 
 
 ## Hosting
 
-For now the web app is `https://rentanllm.vercel.app` and the API is its own Vercel project. Browsers reach it **same-origin** through a Next.js rewrite in the web app, `https://rentanllm.vercel.app/api/:path*` → the API project, with the `/api` prefix stripped (so `/api/auth/me` arrives here as `/auth/me`). Server-side code in the web app calls the API project's URL directly and forwards the `Cookie` header. Production settings:
+The web app is `https://rentanllm.xyz` (`rentanllm.xyz` redirects there) and the API is its own Vercel project. Browsers reach it **same-origin** through a Next.js rewrite in the web app, `https://rentanllm.xyz/api/:path*` → the API project, with the `/api` prefix stripped (so `/api/auth/me` arrives here as `/auth/me`). Server-side code in the web app calls the API project's URL directly and forwards the `Cookie` header. Production settings:
 
-- `SIWE_DOMAIN=rentanllm.vercel.app` (the host the user signs in on)
-- `COOKIE_DOMAIN` unset: the session cookie is host-only on `rentanllm.vercel.app` (`Set-Cookie` carries no `Domain` attribute) with `Path=/`, so it is sent to every `/api/*` call
-- `WEB_ORIGINS=https://rentanllm.vercel.app` (CORS only matters for direct cross-origin calls; the rewrite is same-origin)
+- `SIWE_DOMAIN=rentanllm.xyz` (the host the user signs in on)
+- `COOKIE_DOMAIN` unset: the session cookie is host-only on `rentanllm.xyz` (`Set-Cookie` carries no `Domain` attribute) with `Path=/`, so it is sent to every `/api/*` call
+- `WEB_ORIGINS=https://rentanllm.xyz` (CORS only matters for direct cross-origin calls; the rewrite is same-origin)
 
 Nothing assumes the API sits at the root of its own host: there are no redirects or absolute URLs in responses, and `/openapi.json` declares no `servers` (behind the rewrite its paths are relative to `/api`). The every-minute cron calls (Hostinger `scheduler`, or Vercel Cron on Pro) go to the API project directly.
 
@@ -52,14 +52,14 @@ Errors are JSON `{"_tag": "...", "message": "..."}`: `Unauthorized` 401, `NotFou
 | `DB_MAX_CONNECTIONS` |  | `5` | Pool size per instance; use 1-3 on Vercel |
 | `SESSION_SECRET` | yes |  | ≥ 32 chars; HMAC key for stored session-token hashes |
 | `CRON_SECRET` | yes |  | ≥ 32 chars; Vercel sends it as `Authorization: Bearer …` to cron paths |
-| `SIWE_DOMAIN` | yes |  | The `domain` SIWE messages must carry: the web app's host, `rentanllm.vercel.app` for now |
-| `WEB_ORIGINS` |  |  | Comma-separated origins allowed by CORS with credentials: `https://rentanllm.vercel.app` for now |
+| `SIWE_DOMAIN` | yes |  | The `domain` SIWE messages must carry: the web app's host, `rentanllm.xyz` |
+| `WEB_ORIGINS` |  |  | Comma-separated origins allowed by CORS with credentials: `https://rentanllm.xyz` |
 | `COOKIE_DOMAIN` |  | host-only | Leave unset behind the `/api` rewrite. Only for web and API on sibling subdomains, e.g. `.rentanllm.xyz` |
 | `SESSION_TTL_HOURS` |  | `168` | Session lifetime |
 | `SIWE_NONCE_TTL_SECONDS` |  | `600` | Nonce lifetime |
 | `NODE_STALE_SECONDS` |  | `90` | Heartbeat age after which a node is marked offline |
 | `HEDERA_RPC_URL` |  |  | Hedera testnet JSON-RPC (e.g. `https://testnet.hashio.io/api`); enables ERC-1271/6492 smart-wallet sign-in |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` |  | off | OTLP/HTTP base URL, e.g. `https://otel.<ip-dashed>.sslip.io`; `/v1/traces` and `/v1/logs` are appended |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` |  | off | OTLP/HTTP base URL, e.g. `https://otel.rentanllm.xyz`; `/v1/traces` and `/v1/logs` are appended |
 | `OTEL_EXPORTER_OTLP_HEADERS` |  |  | `Authorization=Bearer%20<token>` (values URL-encoded: write the space as `%20`) |
 | `OTEL_SERVICE_NAME` |  | `rentanllm-api` | Service name on spans and logs |
 

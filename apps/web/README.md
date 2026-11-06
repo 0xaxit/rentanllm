@@ -34,28 +34,28 @@ All optional; the app builds with none. See `.env.example`.
 | `NEXT_PUBLIC_GATEWAY_URL` | `http://localhost:8787` | Gateway: agents' base URL (`+ /v1`), node tunnel (`wss://<host>/tunnel`), x402 market route |
 | `NEXT_PUBLIC_HEDERA_RPC_URL` | viem public RPC (Hashio) | Hedera testnet JSON-RPC for the wallet (sign-in runs on Hedera testnet) |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` |  | Enables WalletConnect (QR / mobile wallets) |
-| `NEXT_PUBLIC_SITE_URL` | `https://rentanllm.vercel.app` | `metadataBase` for Open Graph images, WalletConnect metadata |
+| `NEXT_PUBLIC_SITE_URL` | `https://rentanllm.xyz` | `metadataBase` for Open Graph images, WalletConnect metadata |
 | `NEXT_PUBLIC_FARO_URL` |  | Grafana Faro collector (`https://otel.<host>/collect`); Faro is off when unset |
 | `NEXT_PUBLIC_FARO_APP_KEY` |  | Alloy's `FARO_APP_KEY` (public, not a secret) |
 | `NEXT_PUBLIC_FARO_ENV` | `production` | Faro `app.environment` |
 
-### Production (Vercel project `rentanllm`, https://rentanllm.vercel.app)
+### Production (Vercel project `rentanllm`, https://rentanllm.xyz)
 
 Root Directory `apps/web` with "Include files outside the root directory" on; framework Next.js; install `bun install --frozen-lockfile`. No `vercel.json` is needed (crons live on the API project).
 
 | Variable | Value |
 | --- | --- |
-| `API_ORIGIN` | `https://rentanllm-api.vercel.app` (the API project) |
-| `NEXT_PUBLIC_GATEWAY_URL` | `https://gw.<vps-ip-dashed>.sslip.io` |
-| `NEXT_PUBLIC_SITE_URL` | `https://rentanllm.vercel.app` |
-| `NEXT_PUBLIC_FARO_URL` | `https://otel.<vps-ip-dashed>.sslip.io/collect` |
+| `API_ORIGIN` | `https://api.rentanllm.xyz` (the API project) |
+| `NEXT_PUBLIC_GATEWAY_URL` | `https://gw.rentanllm.xyz` |
+| `NEXT_PUBLIC_SITE_URL` | `https://rentanllm.xyz` |
+| `NEXT_PUBLIC_FARO_URL` | `https://otel.rentanllm.xyz/collect` |
 | `NEXT_PUBLIC_FARO_APP_KEY` | `FARO_APP_KEY` from `deploy/hostinger/.env` |
 
-The API project needs `SIWE_DOMAIN=rentanllm.vercel.app` and no `COOKIE_DOMAIN`. The full table for all three pieces (web, API, gateway) is in [deploy/hostinger/README.md](../../deploy/hostinger/README.md#2-dns). Changing `API_ORIGIN` needs a redeploy, since rewrites are compiled into the build.
+The API project needs `SIWE_DOMAIN=rentanllm.xyz` and no `COOKIE_DOMAIN`. The full table for all three pieces (web, API, gateway) is in [deploy/hostinger/README.md](../../deploy/hostinger/README.md#2-dns). Changing `API_ORIGIN` needs a redeploy, since rewrites are compiled into the build.
 
 ## Sessions
 
-Sign-in is ConnectKit's `SIWEProvider` against `/auth/nonce`, `/auth/verify`, `/auth/me` and `/auth/logout` (`lib/siwe.ts`). The API binds each nonce to an address, so the nonce is fetched inside `createMessage`, once ConnectKit knows the address. The browser calls the API same-origin at `<origin>/api/*` (`lib/env.ts` `apiBaseUrl`), which `next.config.ts` rewrites to `API_ORIGIN` with the `/api` prefix stripped. The API sets the `rentanllm_session` cookie (httpOnly, Secure, SameSite=Lax, Path=/, no Domain), so it is host-only on the web app's host: that is what makes sessions work on `*.vercel.app`, a public suffix where two projects can never share a cookie. Server Components read that cookie and forward it to the API directly (`lib/api/server.ts`). The SIWE message's `domain` is `window.location.host`, so the API's `SIWE_DOMAIN` must be the web app's host (`rentanllm.vercel.app`, `localhost:3000` locally).
+Sign-in is ConnectKit's `SIWEProvider` against `/auth/nonce`, `/auth/verify`, `/auth/me` and `/auth/logout` (`lib/siwe.ts`). The API binds each nonce to an address, so the nonce is fetched inside `createMessage`, once ConnectKit knows the address. The browser calls the API same-origin at `<origin>/api/*` (`lib/env.ts` `apiBaseUrl`), which `next.config.ts` rewrites to `API_ORIGIN` with the `/api` prefix stripped. The API sets the `rentanllm_session` cookie (httpOnly, Secure, SameSite=Lax, Path=/, no Domain), so it is host-only on the web app's host: that is what makes sessions work on `*.vercel.app`, a public suffix where two projects can never share a cookie. Server Components read that cookie and forward it to the API directly (`lib/api/server.ts`). The SIWE message's `domain` is `window.location.host`, so the API's `SIWE_DOMAIN` must be the web app's host (`rentanllm.xyz`, `localhost:3000` locally).
 
 ## Routes
 

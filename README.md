@@ -65,7 +65,7 @@ Every paid request settles as one USDC transfer on Hedera testnet, straight from
 
 |  |  |
 | --- | --- |
-| Endpoint | `POST https://gw.31-97-230-118.sslip.io/v1/chat/completions` (OpenAI-compatible; `GET /v1/models` lists what is for sale) |
+| Endpoint | `POST https://gw.rentanllm.xyz/v1/chat/completions` (OpenAI-compatible; `GET /v1/models` lists what is for sale) |
 | Network | `hedera:testnet` (x402 v2, scheme `exact`) |
 | Asset | Circle's testnet USDC, HTS token [`0.0.429274`](https://hashscan.io/testnet/token/0.0.429274) (6 decimals) |
 | Facilitator | [x402.org](https://x402.org/facilitator). Its account `0.0.9185802` submits the transfer and pays the HBAR fee, so agents need only USDC |
@@ -98,7 +98,7 @@ agent                         gateway                      facilitator          
 ```sh
 bun install
 cd apps/mcp
-RENTANLLM_GATEWAY_URL=https://gw.31-97-230-118.sslip.io \
+RENTANLLM_GATEWAY_URL=https://gw.rentanllm.xyz \
 RENTANLLM_MCP_ACCOUNT=<your 0.0.x account> \
 RENTANLLM_MCP_APPROVAL=none \
 RENTANLLM_MCP_KEY_FILE=<file with its ECDSA private key> \
