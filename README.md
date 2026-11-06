@@ -110,12 +110,12 @@ bun apps/api/scripts/agent-reputation.ts 146
 
 The gateway writes the live offers and one receipt per paid request to Arkiv's Rabdi testnet. The market page reads them back from Arkiv. See [`arkiv/`](arkiv/) for the schema and how each part is used.
 
-- **Writer wallet:** `0x9d8942916A81159596BD37384403d90466e8E84b`
+- **Writer wallet:** `0x7A67B250ECa8Ed822B8439b331f8Eff22c1C20F8`
 - **Query to run** (no account or key needed):
 
   ```sh
   bun install
-  bun packages/arkiv/scripts/query.ts 0x9d8942916A81159596BD37384403d90466e8E84b
+  bun packages/arkiv/scripts/query.ts 0x7A67B250ECa8Ed822B8439b331f8Eff22c1C20F8
   ```
 
 ## AI use

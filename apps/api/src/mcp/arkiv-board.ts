@@ -8,7 +8,7 @@ import { arkivReader, readOffers } from "@rentanllm/arkiv";
 import type { PublishedOffer } from "@rentanllm/arkiv";
 
 /** The gateway's Arkiv writer (public; see README). */
-const DEFAULT_WRITER = "0x9d8942916A81159596BD37384403d90466e8E84b";
+const DEFAULT_WRITER = "0x7A67B250ECa8Ed822B8439b331f8Eff22c1C20F8";
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/u;
 const READ_TIMEOUT_MS = 5000;
 

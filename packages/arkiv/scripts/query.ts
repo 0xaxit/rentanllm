@@ -5,7 +5,7 @@
  */
 import { arkivReader, entityUrl, readOffers, readReceipts } from "../src/index";
 
-const DEFAULT_WRITER = "0x9d8942916A81159596BD37384403d90466e8E84b";
+const DEFAULT_WRITER = "0x7A67B250ECa8Ed822B8439b331f8Eff22c1C20F8";
 
 const [writer = DEFAULT_WRITER, model] = process.argv.slice(2);
 const reader = arkivReader(process.env.ARKIV_ACCESS_KEY ?? "");

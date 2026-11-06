@@ -2,7 +2,7 @@
 
 RentAnLLM's gateway writes two entity types to Arkiv's Rabdi testnet (chain 7794095) with `@arkiv-network/sdk` 1.0. Both schemas live in [`packages/arkiv/src/index.ts`](../packages/arkiv/src/index.ts).
 
-**Writer and owner:** `0x9d8942916A81159596BD37384403d90466e8E84b` (the gateway). It creates, patches and deletes every entity. Readers filter with `ownedBy(writer)`, because anyone can write entities under the same schema names.
+**Writer and owner:** `0x7A67B250ECa8Ed822B8439b331f8Eff22c1C20F8` (the gateway). It creates, patches and deletes every entity. Readers filter with `ownedBy(writer)`, because anyone can write entities under the same schema names.
 
 ## `rentanllm.offer`
 

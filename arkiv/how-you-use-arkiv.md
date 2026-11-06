@@ -25,7 +25,7 @@
 ## Query to run
 
 ```sh
-bun packages/arkiv/scripts/query.ts 0x9d8942916A81159596BD37384403d90466e8E84b llama3.1:8b
+bun packages/arkiv/scripts/query.ts 0x7A67B250ECa8Ed822B8439b331f8Eff22c1C20F8 llama3.1:8b
 ```
 
 Or with the SDK:
@@ -35,7 +35,7 @@ publicClient
   .select({ $key: true, model: true, priceOut: true, online: true })
   .from(OfferSchema)
   .where(eq("model", "llama3.1:8b"))
-  .ownedBy("0x9d8942916A81159596BD37384403d90466e8E84b")
+  .ownedBy("0x7A67B250ECa8Ed822B8439b331f8Eff22c1C20F8")
   .orderBy(asc("priceOut"))
   .fetch();
 ```
