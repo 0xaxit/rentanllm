@@ -6,6 +6,7 @@ import { callApi } from "./client";
 import type { ApiResult } from "./errors";
 import type {
   ApiNode,
+  BuyerPolicy,
   Listing,
   PriceSuggestion,
   Provider,
@@ -120,3 +121,9 @@ export const getPriceSuggestion = async (input: {
       },
     })
   );
+
+/** Saves the signed-in buyer's spending limits; the gateway applies them at once. */
+export const updateBuyerPolicy = async (
+  policy: BuyerPolicy
+): Promise<ApiResult<BuyerPolicy>> =>
+  await callApi((api) => api.buyer.updatePolicy({ payload: policy }));

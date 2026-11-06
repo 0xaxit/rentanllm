@@ -4,6 +4,8 @@
  * cross the Server -> Client Component boundary intact.
  */
 import type {
+  BuyerOverviewSchema,
+  BuyerPolicySchema,
   ListingSchema,
   MarketOfferSchema,
   ModelRefSchema,
@@ -35,3 +37,5 @@ export type PriceSuggestion = typeof PriceSuggestionSchema.Type;
 export type PriceVerdict = typeof PriceVerdictSchema.Type;
 export type OwnerSales = typeof OwnerSalesSchema.Type;
 export type SalesTotals = OwnerSales["lifetime"];
+export type BuyerOverview = typeof BuyerOverviewSchema.Type;
+export type BuyerPolicy = typeof BuyerPolicySchema.Type;

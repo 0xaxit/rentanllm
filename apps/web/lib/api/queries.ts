@@ -7,6 +7,7 @@ import { Effect } from "effect";
 import type { ApiResult } from "./errors";
 import { publicApi, serverApi } from "./server";
 import type {
+  BuyerOverview,
   Listing,
   MarketOffer,
   ModelRef,
@@ -18,6 +19,10 @@ import type {
   Provider,
   User,
 } from "./types";
+
+/** The signed-in buyer's paying account, limits and last 24 hours of spend. */
+export const getBuyerOverview = async (): Promise<ApiResult<BuyerOverview>> =>
+  await serverApi((api) => api.buyer.overview());
 
 export const getMe = async (): Promise<ApiResult<User>> =>
   await serverApi((api) => api.auth.me());
