@@ -204,7 +204,7 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
     },
     {
       instructions:
-        "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models (it reads the public Arkiv board), then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. For a picture, use generate_image with an image model (kind image in list_models). agent_wallet shows the balance and recent payments. When you show a buy_inference result, show the exact prompt that was sent and the model's answer verbatim (in a quote or code block), then one payment line with the HashScan link. Do not summarize, grade or comment on the answer unless the user asks.",
+        "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models once per question (it reads the public Arkiv board and its answer is complete, so do not call it again to check), then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. For a picture, use generate_image with an image model (kind image in list_models). agent_wallet shows the balance and recent payments. When you show a buy_inference result, show the exact prompt that was sent and the model's answer verbatim (in a quote or code block), then one payment line with the HashScan link. Do not summarize, grade or comment on the answer unless the user asks.",
     }
   );
 

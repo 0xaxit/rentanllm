@@ -102,7 +102,7 @@ export const modelsFromOffers = (
 export const modelsText = (result: ArkivModels): string => {
   const head =
     result.source === "arkiv"
-      ? `Read from the public Arkiv board (Rabdi testnet), entities written by ${result.writer}. Not from RentAnLLM's API.`
+      ? `This is the complete list, read from the public Arkiv board (Rabdi testnet), entities written by ${result.writer}. Not from RentAnLLM's API.`
       : "Arkiv did not answer, so this list comes from the RentAnLLM gateway.";
   if (result.models.length === 0) {
     return `${head}\n\nNothing is for sale right now.`;
@@ -120,8 +120,12 @@ export const modelsText = (result: ArkivModels): string => {
       `${m.model}: ${m.sellers_online} of ${m.sellers} sellers online, ${price}`
     );
     for (const o of m.offers) {
+      const offerPrice =
+        m.kind === "image"
+          ? `${o.output_usdc_per_mtok} USDC per image`
+          : `${o.input_usdc_per_mtok} / ${o.output_usdc_per_mtok}`;
       lines.push(
-        `  ${o.online ? "online " : "offline"} ${o.input_usdc_per_mtok} / ${o.output_usdc_per_mtok} · pays ${o.pay_to} · ${o.explorer_url}`
+        `  ${o.online ? "online " : "offline"} ${offerPrice} · pays ${o.pay_to} · ${o.explorer_url}`
       );
     }
   }
