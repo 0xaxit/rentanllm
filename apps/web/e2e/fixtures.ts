@@ -7,6 +7,7 @@ export const MODEL = "llama3.1:8b";
 
 export const marketOffers = () => [
   {
+    agent: null,
     listingId: LISTING_ID,
     maxConcurrency: 2,
     models: [MODEL],
@@ -15,6 +16,12 @@ export const marketOffers = () => [
     priceInPerMtokUsdc: "200000",
     priceOutPerMtokUsdc: "600000",
     provider: "ollama",
+    reputation: {
+      requests24h: 3,
+      successPct: 100,
+      ttfbMs: 412,
+      uptimePct: 99.5,
+    },
     sellerWallet: SELLER_WALLET,
   },
 ];

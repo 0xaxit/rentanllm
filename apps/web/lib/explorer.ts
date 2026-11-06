@@ -28,3 +28,11 @@ export const auditTopicUrl = (topicId: string): string =>
 /** One audit message as the mirror node serves it: JSON with its consensus time and running hash. */
 export const auditMessageUrl = (topicId: string, sequence: number): string =>
   `https://testnet.mirrornode.hedera.com/api/v1/topics/${topicId}/messages/${sequence}`;
+
+/** An EVM transaction (e.g. ERC-8004 feedback) on HashScan testnet. */
+export const evmTxUrl = (hash: string): string =>
+  `https://hashscan.io/testnet/transaction/${hash}`;
+
+/** A contract or account by EVM address on HashScan testnet. */
+export const evmAddressUrl = (address: string): string =>
+  `https://hashscan.io/testnet/contract/${address}`;

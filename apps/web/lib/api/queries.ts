@@ -11,6 +11,7 @@ import type {
   Listing,
   MarketOffer,
   ModelRef,
+  NodeIdentity,
   NodeUptime,
   OwnerDashboard,
   OwnerSales,
@@ -66,6 +67,12 @@ export const getNodeUptimes = async (
     results.map(([nodeId, result]) => [nodeId, result.ok ? result.data : null])
   );
 };
+
+/** The node's ERC-8004 agent and what to register it with. */
+export const getNodeIdentity = async (
+  nodeId: string
+): Promise<ApiResult<NodeIdentity>> =>
+  await serverApi((api) => api.owner.nodeIdentity({ params: { nodeId } }));
 
 export const getMarketOffers = async (): Promise<
   ApiResult<readonly MarketOffer[]>

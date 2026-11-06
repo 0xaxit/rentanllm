@@ -8,6 +8,7 @@ import type {
   BuyerPolicySchema,
   ListingSchema,
   MarketOfferSchema,
+  NodeIdentitySchema,
   ModelRefSchema,
   NodeSchema,
   NodeUptimeSchema,
@@ -31,6 +32,9 @@ export type RegisteredNode = typeof RegisterNodeResponseSchema.Type;
 export type ProviderAccount = typeof ProviderAccountSchema.Type;
 export type Listing = typeof ListingSchema.Type;
 export type MarketOffer = typeof MarketOfferSchema.Type;
+export type NodeIdentity = typeof NodeIdentitySchema.Type;
+export type AgentIdentity = NonNullable<NodeIdentity["agent"]>;
+export type SellerReputation = MarketOffer["reputation"];
 export type PaidRequest = typeof PaidRequestSchema.Type;
 export type OwnerDashboard = typeof OwnerDashboardSchema.Type;
 export type PriceSuggestion = typeof PriceSuggestionSchema.Type;

@@ -3,6 +3,7 @@ import { BlockHeading, Note } from "@/components/primitives";
 import { getMarketOffers } from "@/lib/api/queries";
 import type { MarketOffer } from "@/lib/api/types";
 import { cx } from "@/lib/cx";
+import { API_PROXY_PATH } from "@/lib/env";
 import { providerLabel } from "@/lib/market";
 import { formatPrice } from "@/lib/money";
 
@@ -38,6 +39,8 @@ const COLUMNS = [
   { align: "left", label: "SELLER" },
   { align: "left", label: "$ / M TOKENS IN · OUT" },
   { align: "left", label: "SLOTS" },
+  { align: "left", label: "UPTIME 24H" },
+  { align: "left", label: "TTFB" },
   { align: "right", label: "STATUS" },
 ] as const;
 
@@ -52,6 +55,34 @@ const StatusBadge = ({ online }: { online: boolean }) => (
   </span>
 );
 
+const dash = "—";
+
+/** "99.9%" */
+const uptimeLabel = (pct: number | null): string =>
+  pct === null ? dash : `${pct.toFixed(1)}%`;
+
+/** "412 ms" */
+const ttfbLabel = (ms: number | null): string =>
+  ms === null ? dash : `${ms.toLocaleString("en-US")} ms`;
+
+/** The seller's wallet, with its ERC-8004 agent when it has one. */
+const SellerCell = ({ offer }: { offer: MarketOffer }) => (
+  <span className="inline-flex items-center gap-2">
+    <span title={offer.sellerWallet}>{shortWallet(offer.sellerWallet)}</span>
+    {offer.agent !== null && (
+      <a
+        className="text-amber"
+        href={`${API_PROXY_PATH}/agents/${offer.nodeId}/registration.json`}
+        rel="noopener noreferrer"
+        target="_blank"
+        title={`ERC-8004 agent #${offer.agent.agentId} on Hedera · ${offer.agent.uaid}`}
+      >
+        ✓ AGENT #{offer.agent.agentId}
+      </a>
+    )}
+  </span>
+);
+
 const OfferRow = ({ offer }: { offer: MarketOffer }) => {
   const online = offer.nodeStatus === "online";
   return (
@@ -63,9 +94,7 @@ const OfferRow = ({ offer }: { offer: MarketOffer }) => {
         {providerLabel(offer.provider)}
       </td>
       <td className={cx("py-4 pr-6", online && "text-mud")}>
-        <span title={offer.sellerWallet}>
-          {shortWallet(offer.sellerWallet)}
-        </span>
+        <SellerCell offer={offer} />
       </td>
       <td className={cx("py-4 pr-6", online && "text-enamel")}>
         {formatPrice(offer.priceInPerMtokUsdc)} ·{" "}
@@ -73,6 +102,19 @@ const OfferRow = ({ offer }: { offer: MarketOffer }) => {
       </td>
       <td className={cx("py-4 pr-6", online && "text-enamel")}>
         {offer.maxConcurrency}
+      </td>
+      <td className={cx("py-4 pr-6", online && "text-enamel")}>
+        {uptimeLabel(offer.reputation.uptimePct)}
+      </td>
+      <td
+        className={cx("py-4 pr-6", online && "text-enamel")}
+        title={
+          offer.reputation.requests24h > 0
+            ? `median time to first byte over ${offer.reputation.requests24h} paid requests in 24 hours`
+            : "no paid requests in 24 hours"
+        }
+      >
+        {ttfbLabel(offer.reputation.ttfbMs)}
       </td>
       <td className="py-4 text-right">
         <StatusBadge online={online} />
@@ -101,7 +143,9 @@ export const AvailableNow = async () => {
     >
       <div className="flex flex-col gap-2">
         <Note tone="mud">
-          prices in USDC · the gateway quotes the cheapest online seller
+          prices in USDC · the gateway quotes the cheapest online seller ·
+          uptime and TTFB measured by the platform, posted on chain for ERC-8004
+          agents
         </Note>
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
           <BlockHeading

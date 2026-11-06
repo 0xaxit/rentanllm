@@ -9,6 +9,7 @@ import {
 } from "@/components/app-shell/page-header";
 import { LocalTime } from "@/components/local-time";
 import { AddAccount } from "@/components/owner/add-account";
+import { AgentIdentity } from "@/components/owner/agent-identity";
 import { CreateListing } from "@/components/owner/create-listing";
 import { ListingSection } from "@/components/owner/listing-section";
 import { NodeDetails } from "@/components/owner/node-details";
@@ -16,7 +17,11 @@ import { NodeStatusWatch } from "@/components/owner/node-status-watch";
 import { NodeConnectCommand } from "@/components/owner/register-node";
 import { NodeSteps } from "@/components/owner/setup-steps";
 import { BlockHeading, Note } from "@/components/primitives";
-import { getNodeUptimes, getOwnerOverview } from "@/lib/api/queries";
+import {
+  getNodeIdentity,
+  getNodeUptimes,
+  getOwnerOverview,
+} from "@/lib/api/queries";
 import type { ApiNode, Listing, ProviderAccount } from "@/lib/api/types";
 import { shortId } from "@/lib/cx";
 import { providerLabel } from "@/lib/market";
@@ -137,7 +142,10 @@ const NodePage = async ({
   );
   const steps = nodeSetupSteps({ accounts, listings, node });
   const actions = nodeActions(node, steps, query.next);
-  const uptimes = await getNodeUptimes([node.id]);
+  const [uptimes, identity] = await Promise.all([
+    getNodeUptimes([node.id]),
+    getNodeIdentity(node.id),
+  ]);
 
   return (
     <AppMain>
@@ -198,6 +206,9 @@ const NodePage = async ({
       </div>
 
       <NodeDetails node={node} uptime={uptimes.get(node.id) ?? null} />
+      {identity.ok && (
+        <AgentIdentity identity={identity.data} nodeId={node.id} />
+      )}
     </AppMain>
   );
 };

@@ -8,6 +8,7 @@ import type {
   ApiNode,
   BuyerPolicy,
   Listing,
+  NodeIdentity,
   PriceSuggestion,
   Provider,
   ProviderAccount,
@@ -127,3 +128,12 @@ export const updateBuyerPolicy = async (
   policy: BuyerPolicy
 ): Promise<ApiResult<BuyerPolicy>> =>
   await callApi((api) => api.buyer.updatePolicy({ payload: policy }));
+
+/** Links the ERC-8004 agent the owner registered; the API checks it on chain. */
+export const linkNodeIdentity = async (
+  nodeId: string,
+  agentId: string
+): Promise<ApiResult<NodeIdentity>> =>
+  await callApi((api) =>
+    api.owner.linkNodeIdentity({ params: { nodeId }, payload: { agentId } })
+  );
