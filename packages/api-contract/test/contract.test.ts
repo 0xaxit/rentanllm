@@ -9,6 +9,10 @@ describe("RentAnLlmApi", () => {
   it("documents every route", () => {
     expect(Object.keys(spec.paths).toSorted()).toEqual([
       "/agents/{nodeId}/registration.json",
+      "/approvals",
+      "/approvals/{approvalId}/cancel",
+      "/approvals/{approvalId}/check",
+      "/approvals/{approvalId}/consume",
       "/auth/logout",
       "/auth/me",
       "/auth/nonce",
