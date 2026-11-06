@@ -7,11 +7,7 @@ import { CopyButton } from "@/components/copy-button";
 import { AgentWalletCard } from "@/components/market/agent-wallet-card";
 import { UseTabs } from "@/components/market/use-tabs";
 import type { UseMode } from "@/components/market/use-tabs";
-import {
-  BlockHeading,
-  Callout,
-  Note,
-} from "@/components/primitives";
+import { BlockHeading, Callout, Note } from "@/components/primitives";
 import { SignInButton } from "@/components/wallet/sign-in-button";
 import { getAgentWallet, getMarketOffers } from "@/lib/api/queries";
 import type { AgentWallet } from "@/lib/api/types";
@@ -254,7 +250,11 @@ const MarketPage = async ({
               key={row.model}
               label={row.model}
               tone={row.online > 0 ? "amber" : "muted"}
-              value={`from ${formatPrice(row.cheapestIn)} in · ${formatPrice(row.cheapestOut)} out`}
+              value={
+                row.kind === "image"
+                  ? `from ${formatPrice(row.cheapestOut)} / image`
+                  : `from ${formatPrice(row.cheapestIn)} in · ${formatPrice(row.cheapestOut)} out`
+              }
             />
           ))}
           {models.length === 0 && (

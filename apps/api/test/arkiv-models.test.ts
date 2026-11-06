@@ -11,6 +11,7 @@ const offer = (
   priceOut: bigint
 ): PublishedOffer => ({
   key: key as `0x${string}`,
+  kind: "chat",
   listing: `listing-${key}`,
   model,
   network: "hedera:testnet",

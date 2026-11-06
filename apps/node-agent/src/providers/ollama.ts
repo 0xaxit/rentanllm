@@ -19,6 +19,7 @@ const MS_PER_SECOND = 1000;
 const LINE_BREAK = /\r?\n/u;
 
 export const DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
+const IMAGES_PATH = "/v1/images/generations";
 
 const lower = (
   headers: Readonly<Record<string, string>>
@@ -66,9 +67,24 @@ interface UsageAccumulator {
   sawUsage: boolean;
 }
 
+/**
+ * An image is billed as one million output tokens (the gateway prices it that way too),
+ * so a generated image reports as that many output tokens.
+ */
+export const IMAGE_OUTPUT_TOKENS = 1_000_000;
+/** Placeholder model name on image usage; the gateway records the model it was paid for. */
+const IMAGE_USAGE_MODEL = "image";
+
 /** Applies an OpenAI chat-completions object (a full response or one stream chunk). */
 const applyCompletion = (acc: UsageAccumulator, completion: unknown): void => {
   if (!isRecord(completion)) {
+    return;
+  }
+  // An images/generations answer: one entry per image, no token usage.
+  if (Array.isArray(completion.data) && !isRecord(completion.usage)) {
+    acc.model ??= IMAGE_USAGE_MODEL;
+    acc.sawUsage = true;
+    acc.outputTokens = completion.data.length * IMAGE_OUTPUT_TOKENS;
     return;
   }
   if (typeof completion.model === "string") {
@@ -189,6 +205,11 @@ export const readOllamaMeters = (
 
 export interface OllamaOptions {
   readonly baseUrl: string;
+  /**
+   * A local image server speaking OpenAI's POST /v1/images/generations (for example
+   * stable-diffusion.cpp's sd-server). Null: this node sells no images.
+   */
+  readonly imageBaseUrl: string | null;
   /** A model Ollama has pulled; the meter probe asks Ollama about it. */
   readonly probeModel: string;
 }
@@ -201,7 +222,10 @@ export const makeOllamaAdapter = (options: OllamaOptions): ProviderAdapter => ({
       ...pickHeaders(request.headers, FORWARDED_REQUEST_HEADERS),
       "user-agent": USER_AGENT,
     },
-    url: `${options.baseUrl}${request.path}`,
+    url:
+      request.path === IMAGES_PATH && options.imageBaseUrl !== null
+        ? `${options.imageBaseUrl}${request.path}`
+        : `${options.baseUrl}${request.path}`,
   }),
   cooloffMs: (headers, defaultMs) => {
     const retryAfter = Number(lower(headers)["retry-after"]);

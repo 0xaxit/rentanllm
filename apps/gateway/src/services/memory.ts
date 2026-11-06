@@ -51,6 +51,8 @@ export const SeedSchema = Schema.Struct({
   offers: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({
+        /** Default "chat". */
+        kind: Schema.optionalKey(Schema.Literals(["chat", "image"])),
         listingId: Schema.String,
         maxConcurrency: Schema.Int,
         models: Schema.Array(Schema.String),
@@ -112,6 +114,7 @@ export const makeMemoryState = (seed: Seed): MemoryState => {
     meters: new Map(),
     nodes,
     offers: (seed.offers ?? []).map((o) => ({
+      kind: o.kind ?? "chat",
       listingId: o.listingId,
       maxConcurrency: o.maxConcurrency,
       models: o.models,

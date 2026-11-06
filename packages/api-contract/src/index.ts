@@ -66,6 +66,7 @@ export {
   HederaAccountSchema,
   HexSchema,
   ListingSchema,
+  ListingKindSchema,
   ListingStatusSchema,
   MarketOfferSchema,
   OwnerSalesSchema,

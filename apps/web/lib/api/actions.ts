@@ -56,6 +56,7 @@ export interface ListingPrices {
 
 export const createListing = async (
   input: ListingPrices & {
+    readonly kind?: "chat" | "image";
     readonly providerAccountId: string;
     readonly models: readonly string[];
     readonly sessionCutoffPct: number;
@@ -66,6 +67,7 @@ export const createListing = async (
   await callApi((api) =>
     api.owner.createListing({
       payload: {
+        ...(input.kind === undefined ? {} : { kind: input.kind }),
         models: input.models,
         priceCacheReadPerMtokUsdc: input.priceCacheReadPerMtokUsdc,
         priceCacheWritePerMtokUsdc: input.priceCacheWritePerMtokUsdc,

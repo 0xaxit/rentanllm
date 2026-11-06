@@ -59,6 +59,7 @@ export const toListing = (
   provider: Listing["provider"]
 ): Listing => ({
   id: row.id,
+  kind: row.kind,
   maxConcurrency: row.maxConcurrency,
   models: row.models,
   priceCacheReadPerMtokUsdc: row.priceCacheReadPerMtokUsdc,

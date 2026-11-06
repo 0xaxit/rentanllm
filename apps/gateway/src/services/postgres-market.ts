@@ -25,6 +25,7 @@ type MicrosColumn = bigint | string | number;
 
 interface OfferRow {
   readonly id: string;
+  readonly kind: string;
   readonly max_concurrency: number;
   readonly models: readonly string[];
   readonly node_id: string;
@@ -71,6 +72,7 @@ const offerOf = (row: OfferRow): MarketOffer | null => {
     return null;
   }
   return {
+    kind: row.kind === "image" ? "image" : "chat",
     listingId: row.id,
     maxConcurrency: row.max_concurrency,
     models: row.models,
@@ -95,7 +97,7 @@ export const PostgresMarketStore = Layer.effect(MarketStore)(
 
     const select = (model: string | null) =>
       sql<OfferRow>`
-        select l.id, l.max_concurrency, l.models, l.price_cache_read_per_mtok_usdc,
+        select l.id, l.kind, l.max_concurrency, l.models, l.price_cache_read_per_mtok_usdc,
                l.price_cache_write_per_mtok_usdc, l.price_in_per_mtok_usdc,
                l.price_out_per_mtok_usdc, pa.provider, n.id as node_id, n.owner_id,
                u.wallet_address

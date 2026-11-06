@@ -16,6 +16,11 @@ export const arkivModelsShape = {
         .nullable()
         .describe("Cheapest online seller; null when none is online"),
       cheapest_output_usdc_per_mtok: z.string().nullable(),
+      kind: z
+        .enum(["chat", "image"])
+        .describe(
+          "chat: buy with buy_inference, priced per million tokens; image: buy with generate_image, and the output price is the price of one image"
+        ),
       model: z.string(),
       offers: z.array(
         z.object({
@@ -72,6 +77,7 @@ export const modelsFromOffers = (
         cheapest === undefined ? null : formatUsdc(cheapest.priceIn),
       cheapest_output_usdc_per_mtok:
         cheapest === undefined ? null : formatUsdc(cheapest.priceOut),
+      kind: list[0]?.kind ?? "chat",
       model,
       offers: sorted.map((o) => ({
         entity: o.key,
@@ -103,10 +109,13 @@ export const modelsText = (result: ArkivModels): string => {
   }
   const lines = [head, ""];
   for (const m of result.models) {
-    const price =
-      m.cheapest_input_usdc_per_mtok === null
-        ? "no seller online"
-        : `cheapest online: ${m.cheapest_input_usdc_per_mtok} in / ${m.cheapest_output_usdc_per_mtok} out USDC per M tokens`;
+    let price = "no seller online";
+    if (m.cheapest_input_usdc_per_mtok !== null) {
+      price =
+        m.kind === "image"
+          ? `cheapest online: ${m.cheapest_output_usdc_per_mtok} USDC per image (generate_image)`
+          : `cheapest online: ${m.cheapest_input_usdc_per_mtok} in / ${m.cheapest_output_usdc_per_mtok} out USDC per M tokens`;
+    }
     lines.push(
       `${m.model}: ${m.sellers_online} of ${m.sellers} sellers online, ${price}`
     );

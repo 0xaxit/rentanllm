@@ -85,6 +85,7 @@ describe("Ollama requests", () => {
   it("forwards to the local Ollama without any credential header", () => {
     const adapter = makeOllamaAdapter({
       baseUrl: "http://127.0.0.1:11434",
+      imageBaseUrl: null,
       probeModel: "llama3.1:8b",
     });
     const built = adapter.buildRequest(
@@ -132,6 +133,7 @@ describe("Ollama config", () => {
       resolveConfig({ ...base, ollamaModel: "llama3.1:8b" }, dir()).ollama
     ).toEqual({
       baseUrl: "http://127.0.0.1:11434",
+      imageBaseUrl: null,
       probeModel: "llama3.1:8b",
     });
   });
@@ -151,5 +153,39 @@ describe("Ollama config", () => {
     );
     const credential = await Effect.runPromise(store.get("ollama"));
     expect(Redacted.value(credential)).toBe("none");
+  });
+
+  it("sends image requests to the image server and bills each image as 1M output tokens", () => {
+    const adapter = makeOllamaAdapter({
+      baseUrl: "http://127.0.0.1:11434",
+      imageBaseUrl: "http://127.0.0.1:1234",
+      probeModel: "llama3.1:8b",
+    });
+    const built = adapter.buildRequest(
+      {
+        body: JSON.stringify({ model: "flux-2-klein-4b", prompt: "a cat" }),
+        headers: {},
+        id: "r1",
+        maxOutputTokens: null,
+        method: "POST",
+        path: "/v1/images/generations",
+        provider: "ollama",
+        stream: false,
+        type: "proxy_request",
+      } as never,
+      Redacted.make("")
+    );
+    expect(built.url).toBe("http://127.0.0.1:1234/v1/images/generations");
+    const tracker = adapter.usageTracker("application/json");
+    tracker.feed(
+      JSON.stringify({
+        created: 1,
+        data: [{ b64_json: "AA" }, { b64_json: "BB" }],
+      })
+    );
+    expect(tracker.finish()).toMatchObject({
+      inputTokens: 0,
+      outputTokens: 2_000_000,
+    });
   });
 });

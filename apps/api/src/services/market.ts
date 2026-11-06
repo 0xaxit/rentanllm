@@ -79,6 +79,7 @@ export const marketOffers = Effect.fn("market.offers")(function* offersGen() {
         : [
             {
               agent: identity === null ? null : toAgentIdentity(identity),
+              kind: listing.kind,
               listingId: listing.id,
               maxConcurrency: listing.maxConcurrency,
               models: listing.models,

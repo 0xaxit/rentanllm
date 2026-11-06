@@ -18,6 +18,8 @@ import { CHAT_COMPLETIONS_PATH } from "./route.ts";
 
 interface ModelEntry {
   cheapestInput: Micros | null;
+  /** "image": sold on POST /v1/images/generations, cheapestOutput is per image. */
+  kind: "chat" | "image";
   cheapestOutput: Micros | null;
   online: number;
   sellers: number;
@@ -44,6 +46,7 @@ export const handleListModels = Effect.gen(function* listModels() {
     for (const model of offer.models) {
       const entry = models.get(model) ?? {
         cheapestInput: null,
+        kind: offer.kind,
         cheapestOutput: null,
         online: 0,
         sellers: 0,
@@ -71,6 +74,7 @@ export const handleListModels = Effect.gen(function* listModels() {
       cheapest_output_usdc_per_mtok:
         entry.cheapestOutput === null ? null : formatUsdc(entry.cheapestOutput),
       id,
+      kind: entry.kind,
       object: "model" as const,
       owned_by: "rentanllm-market",
       sellers: entry.sellers,

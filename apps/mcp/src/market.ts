@@ -30,6 +30,8 @@ export interface ModelListing {
   readonly cheapest_input_usdc_per_mtok: string | null;
   readonly cheapest_output_usdc_per_mtok: string | null;
   readonly id: string;
+  /** "image": an image model; the output price is per image. Older gateways omit it. */
+  readonly kind?: "chat" | "image";
   readonly sellers: number;
   readonly sellers_online: number;
 }
@@ -108,9 +110,101 @@ export const requestQuote = async (
   gatewayUrl: string,
   network: PayNetwork,
   request: ChatRequest
+): Promise<Quote> =>
+  await quoteAt(
+    `${gatewayUrl}/v1/chat/completions`,
+    chatBody(request),
+    network,
+    request.model
+  );
+
+/** One image request: the market's OpenAI images/generations fields. */
+export interface ImageRequest {
+  readonly model: string;
+  readonly prompt: string;
+  /** "512x512", "768x768" or "1024x1024". */
+  readonly size: string;
+}
+
+const imageBody = (request: ImageRequest) =>
+  JSON.stringify({
+    model: request.model,
+    n: 1,
+    prompt: request.prompt,
+    response_format: "b64_json",
+    size: request.size,
+  });
+
+/** Asks the price of one image: an unpaid request, answered with a 402. */
+export const requestImageQuote = async (
+  gatewayUrl: string,
+  network: PayNetwork,
+  request: ImageRequest
+): Promise<Quote> =>
+  await quoteAt(
+    `${gatewayUrl}/v1/images/generations`,
+    imageBody(request),
+    network,
+    request.model
+  );
+
+export interface PaidImage {
+  /** Base64 PNG; null when the seller failed after the payment settled. */
+  readonly base64: string | null;
+  readonly error: string | null;
+  readonly listingId: string | null;
+  readonly requestId: string | null;
+  readonly tx: string | null;
+}
+
+/** Pays for one image and returns it with the payment receipt. */
+export const payForImage = async (
+  gatewayUrl: string,
+  request: ImageRequest,
+  payment: PaymentPayload
+): Promise<PaidImage> => {
+  const response = await fetch(`${gatewayUrl}/v1/images/generations`, {
+    body: imageBody(request),
+    headers: {
+      "content-type": "application/json",
+      "payment-signature": encodePaymentSignatureHeader(payment),
+    },
+    method: "POST",
+  });
+  const receipt = response.headers.get("payment-response");
+  const tx =
+    receipt === null ? null : decodePaymentResponseHeader(receipt).transaction;
+  const meta = {
+    listingId: response.headers.get("x-rentanllm-listing"),
+    requestId: response.headers.get("x-rentanllm-request-id"),
+    tx,
+  };
+  if (!response.ok) {
+    const message = await errorMessage(response);
+    if (receipt === null) {
+      throw new MarketError(message);
+    }
+    return { ...meta, base64: null, error: message };
+  }
+  const body = (await response.json()) as {
+    readonly data?: readonly { readonly b64_json?: string }[];
+  };
+  const base64 = body.data?.[0]?.b64_json ?? null;
+  return {
+    ...meta,
+    base64,
+    error: base64 === null ? "the seller returned no image" : null,
+  };
+};
+
+const quoteAt = async (
+  url: string,
+  body: string,
+  network: PayNetwork,
+  model: string
 ): Promise<Quote> => {
-  const response = await fetch(`${gatewayUrl}/v1/chat/completions`, {
-    body: chatBody(request),
+  const response = await fetch(url, {
+    body,
     headers: { "content-type": "application/json" },
     method: "POST",
   });
@@ -128,7 +222,7 @@ export const requestQuote = async (
   const [terms] = payable;
   if (terms === undefined) {
     throw new MarketError(
-      `no seller of ${request.model} can be paid on ${network} right now`
+      `no seller of ${model} can be paid on ${network} right now`
     );
   }
   return { paymentRequired, terms };

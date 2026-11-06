@@ -35,6 +35,8 @@ export type UsageStatus = "ok" | "error" | "cancelled";
  * per-million-token prices, paid straight to the owner's wallet.
  */
 export interface MarketOffer {
+  /** "image": sold on POST /v1/images/generations; prices.outputPerMtok is the price of one image. */
+  readonly kind: "chat" | "image";
   readonly listingId: string;
   readonly maxConcurrency: number;
   readonly models: readonly string[];

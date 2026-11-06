@@ -306,6 +306,7 @@ export const createListing = Effect.fn("owner.createListing")(
   function* createListingGen(
     ownerId: string,
     input: ListingInput & {
+      readonly kind?: "chat" | "image";
       readonly models: readonly string[];
       readonly priceInPerMtokUsdc: bigint;
       readonly priceOutPerMtokUsdc: bigint;
@@ -334,6 +335,7 @@ export const createListing = Effect.fn("owner.createListing")(
       .insert(listings)
       .values({
         ...listingPatch(input),
+        kind: input.kind ?? "chat",
         models: [...input.models],
         priceInPerMtokUsdc: input.priceInPerMtokUsdc,
         priceOutPerMtokUsdc: input.priceOutPerMtokUsdc,

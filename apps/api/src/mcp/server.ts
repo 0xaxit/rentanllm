@@ -2,7 +2,8 @@
  * The hosted MCP server behind the Claude Desktop connector. One stateless server per
  * request, for the user the OAuth access token belongs to. It pays sellers from that
  * user's agent wallet; the gateway applies the user's Budget limits to every payment.
- * Claude asks the person before each write tool (buy_inference), as for any connector.
+ * Claude asks the person before each write tool (buy_inference, generate_image), as for
+ * any connector.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { PublishedOffer } from "@rentanllm/arkiv";
@@ -11,6 +12,8 @@ import {
   listModels,
   MarketError,
   payAndCall,
+  payForImage,
+  requestImageQuote,
   requestQuote,
   signPaymentAs,
   txLine,
@@ -23,6 +26,9 @@ import { arkivModelsShape, modelsFromOffers, modelsText } from "./arkiv-models";
 import type { ArkivModels } from "./arkiv-models";
 
 const NETWORK = "hedera:testnet";
+/** The image model the market sells today; generate_image uses it unless told otherwise. */
+const DEFAULT_IMAGE_MODEL = "flux-2-klein-4b";
+const IMAGE_SIZES = ["512x512", "768x768", "1024x1024"] as const;
 const DEFAULT_MAX_TOKENS = 512;
 const MAX_TOKENS_LIMIT = 32_768;
 
@@ -33,6 +39,7 @@ const gatewayModels = async (gatewayUrl: string): Promise<ArkivModels> => {
     models: models.map((m) => ({
       cheapest_input_usdc_per_mtok: m.cheapest_input_usdc_per_mtok,
       cheapest_output_usdc_per_mtok: m.cheapest_output_usdc_per_mtok,
+      kind: m.kind ?? "chat",
       model: m.id,
       offers: [],
       sellers: m.sellers,
@@ -197,7 +204,7 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
     },
     {
       instructions:
-        "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models (it reads the public Arkiv board), then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. agent_wallet shows the balance and recent payments. When you show a buy_inference result, show the exact prompt that was sent and the model's answer verbatim (in a quote or code block), then one payment line with the HashScan link. Do not summarize, grade or comment on the answer unless the user asks.",
+        "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models (it reads the public Arkiv board), then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. For a picture, use generate_image with an image model (kind image in list_models). agent_wallet shows the balance and recent payments. When you show a buy_inference result, show the exact prompt that was sent and the model's answer verbatim (in a quote or code block), then one payment line with the HashScan link. Do not summarize, grade or comment on the answer unless the user asks.",
     }
   );
 
@@ -335,6 +342,101 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
           content: [{ text: purchaseText(result), type: "text" as const }],
           isError: answer.error !== null,
           structuredContent: result,
+        };
+      } catch (error) {
+        return failure(`Not paid: ${explain(error)}`);
+      }
+    }
+  );
+
+  server.registerTool(
+    "generate_image",
+    {
+      annotations: {
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+        readOnlyHint: false,
+      },
+      description:
+        "Makes one image from a text prompt on a seller's own GPU, paying the cheapest online seller of the image model from the user's agent wallet (USDC on Hedera testnet). Returns the image and the on-chain receipt. Show the image and one payment line with the HashScan link.",
+      inputSchema: {
+        max_price_usdc: z
+          .string()
+          .optional()
+          .describe('Refuse if the price is above this, e.g. "0.01"'),
+        model: z
+          .string()
+          .optional()
+          .describe(
+            `An image model from list_models (kind "image"); default ${DEFAULT_IMAGE_MODEL}`
+          ),
+        prompt: z.string().min(1).max(2000).describe("What to draw"),
+        size: z
+          .enum(IMAGE_SIZES)
+          .optional()
+          .describe("Default 512x512, which keeps the reply small"),
+      },
+      title: "Generate image",
+    },
+    async (input) => {
+      try {
+        const signer = await ctx.signer();
+        if (signer === null) {
+          return failure(
+            `The user has no agent wallet yet. They can create one and add USDC at ${ctx.walletPage}`
+          );
+        }
+        const request = {
+          model: input.model ?? DEFAULT_IMAGE_MODEL,
+          prompt: input.prompt,
+          size: input.size ?? "512x512",
+        };
+        const quote = await requestImageQuote(ctx.gatewayUrl, NETWORK, request);
+        const price = BigInt(quote.terms.amount);
+        if (
+          input.max_price_usdc !== undefined &&
+          price > usdcToMicros(input.max_price_usdc)
+        ) {
+          return failure(
+            `Not paid: the price is ${formatUsdc(price)} USDC, above the ${input.max_price_usdc} USDC limit.`
+          );
+        }
+        const balance = await ctx.balance(signer.accountId);
+        if (balance !== null && balance < price) {
+          return failure(
+            `Not paid: the agent wallet ${signer.accountId} holds ${formatUsdc(balance)} USDC and this costs ${formatUsdc(price)}. Add USDC at ${ctx.walletPage}`
+          );
+        }
+        const payment = await signPaymentAs(
+          signer.accountId,
+          NETWORK,
+          signer.privateKeyHex,
+          quote
+        );
+        const image = await payForImage(ctx.gatewayUrl, request, payment);
+        const paid = `PAYMENT\n${formatUsdc(price)} USDC from ${signer.accountId} to ${quote.terms.payTo} · ${txLine(NETWORK, image.tx)}`;
+        const head = `MODEL ${request.model} · ${request.size}\nPROMPT\n${request.prompt}`;
+        if (image.base64 === null) {
+          return {
+            content: [
+              {
+                text: `${head}\n\nThe seller failed after the payment settled: ${image.error}\n\n${paid}`,
+                type: "text" as const,
+              },
+            ],
+            isError: true,
+          };
+        }
+        return {
+          content: [
+            {
+              data: image.base64,
+              mimeType: "image/png",
+              type: "image" as const,
+            },
+            { text: `${head}\n\n${paid}`, type: "text" as const },
+          ],
         };
       } catch (error) {
         return failure(`Not paid: ${explain(error)}`);

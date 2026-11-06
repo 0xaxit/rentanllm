@@ -50,6 +50,7 @@ const currentOffers = (resourceUrl: string) =>
       const online = yield* hub.isOnline(offer.nodeId, offer.provider);
       for (const model of offer.models) {
         offers.push({
+          kind: offer.kind,
           listing: offer.listingId,
           model,
           network: requirements.network,

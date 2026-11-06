@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import type { ApiNode, Listing, ProviderAccount } from "@/lib/api/types";
 import { cx, shortId } from "@/lib/cx";
-import { modelsLabel, providerLabel } from "@/lib/market";
+import { modelsLabel, priceLabel, providerLabel } from "@/lib/market";
 import { formatPrice } from "@/lib/money";
 import { nodeStatusTone } from "@/lib/node-status";
 import { nodeHref, nodeSetupSteps } from "@/lib/setup-steps";
@@ -17,8 +17,12 @@ const ListingLine = ({ listing }: { listing: Listing }) => (
       <span className="text-clay"> · {listing.status}</span>
     </span>
     <span className="text-cement shrink-0 text-sm leading-5">
-      {formatPrice(listing.priceInPerMtokUsdc)} ·{" "}
-      {formatPrice(listing.priceOutPerMtokUsdc)}
+      {priceLabel(
+        listing.kind,
+        listing.priceInPerMtokUsdc,
+        listing.priceOutPerMtokUsdc,
+        formatPrice
+      )}
     </span>
   </li>
 );

@@ -4,7 +4,7 @@ import { getMarketOffers } from "@/lib/api/queries";
 import type { MarketOffer } from "@/lib/api/types";
 import { cx } from "@/lib/cx";
 import { API_PROXY_PATH } from "@/lib/env";
-import { providerLabel } from "@/lib/market";
+import { priceLabel, providerLabel } from "@/lib/market";
 import { formatPrice } from "@/lib/money";
 
 const WALLET_HEAD = 6;
@@ -97,8 +97,12 @@ const OfferRow = ({ offer }: { offer: MarketOffer }) => {
         <SellerCell offer={offer} />
       </td>
       <td className={cx("py-4 pr-6", online && "text-enamel")}>
-        {formatPrice(offer.priceInPerMtokUsdc)} ·{" "}
-        {formatPrice(offer.priceOutPerMtokUsdc)}
+        {priceLabel(
+          offer.kind,
+          offer.priceInPerMtokUsdc,
+          offer.priceOutPerMtokUsdc,
+          formatPrice
+        )}
       </td>
       <td className={cx("py-4 pr-6", online && "text-enamel")}>
         {offer.maxConcurrency}

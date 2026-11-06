@@ -54,6 +54,13 @@ export const ProviderAccountStatusSchema = Schema.Literals([
 ]);
 export const ListingStatusSchema = Schema.Literals(["draft", "live", "paused"]);
 
+/**
+ * "chat" sells chat completions priced per million tokens; "image" sells images, and
+ * its output price is the price of one image.
+ */
+export const ListingKindSchema = Schema.Literals(["chat", "image"]);
+export type ListingKind = typeof ListingKindSchema.Type;
+
 // Auth
 
 export const UserSchema = Schema.Struct({
@@ -163,6 +170,7 @@ export const AddProviderAccountRequestSchema = Schema.Struct({
 
 export const ListingSchema = Schema.Struct({
   id: UuidSchema,
+  kind: ListingKindSchema,
   maxConcurrency: Schema.Int,
   models: Schema.Array(Schema.String),
   /** Null: the gateway prices cache reads at input ÷ 10. */
@@ -188,6 +196,8 @@ const ListingModelsSchema = Schema.Array(
 ).check(Schema.isMinLength(1), Schema.isMaxLength(1));
 
 export const CreateListingRequestSchema = Schema.Struct({
+  /** Default "chat". For "image", priceOutPerMtokUsdc is the price of one image. */
+  kind: Schema.optionalKey(ListingKindSchema),
   maxConcurrency: Schema.optionalKey(PositiveIntSchema),
   models: ListingModelsSchema,
   priceCacheReadPerMtokUsdc: Schema.optionalKey(
@@ -380,6 +390,7 @@ export const OAuthRedirectSchema = Schema.Struct({
 export const MarketOfferSchema = Schema.Struct({
   /** The node's ERC-8004 agent; null when the seller has not registered it. */
   agent: Schema.NullOr(AgentIdentitySchema),
+  kind: ListingKindSchema,
   listingId: UuidSchema,
   maxConcurrency: Schema.Int,
   models: Schema.Array(Schema.String),

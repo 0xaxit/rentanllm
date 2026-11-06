@@ -112,3 +112,82 @@ export const withEnforcedCap = (body: ChatBody): string => {
   const { max_completion_tokens: _dropped, ...rest } = body.json;
   return JSON.stringify({ ...rest, max_tokens: body.maxTokens });
 };
+
+/**
+ * An image is billed as one million output tokens, so a listing's output price per
+ * million tokens reads as its price per image and every price, receipt and budget path
+ * stays the one chat uses.
+ */
+export const IMAGE_OUTPUT_TOKENS = 1_000_000;
+/** Sizes sellers' image servers are asked for; anything else is refused up front. */
+export const IMAGE_SIZES = ["512x512", "768x768", "1024x1024"] as const;
+const DEFAULT_IMAGE_SIZE = "512x512";
+const MAX_IMAGES_PER_REQUEST = 4;
+const MAX_IMAGE_PROMPT_CHARS = 2000;
+
+export interface ImageBody {
+  /** What the seller's node is sent: the buyer's fields the market supports, as base64 PNG. */
+  readonly forward: Record<string, unknown>;
+  readonly model: string;
+  readonly n: number;
+  readonly prompt: string;
+  readonly size: string;
+}
+
+const isImageSize = (value: unknown): value is (typeof IMAGE_SIZES)[number] =>
+  typeof value === "string" && (IMAGE_SIZES as readonly string[]).includes(value);
+
+/** Reads an OpenAI images/generations body: model, prompt, n (1-4) and size. */
+export const parseImageBody = (raw: string, _limits: ChatLimits) =>
+  Effect.gen(function* parseImage() {
+    let json: unknown = null;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      return yield* new InvalidRequest({
+        message: "Request body is not valid JSON.",
+      });
+    }
+    if (typeof json !== "object" || json === null || Array.isArray(json)) {
+      return yield* new InvalidRequest({
+        message: "Request body must be a JSON object.",
+      });
+    }
+    const body = json as Record<string, unknown>;
+    if (typeof body.model !== "string" || body.model.length === 0) {
+      return yield* new InvalidRequest({ message: "model: field required" });
+    }
+    if (typeof body.prompt !== "string" || body.prompt.trim().length === 0) {
+      return yield* new InvalidRequest({ message: "prompt: field required" });
+    }
+    if (body.prompt.length > MAX_IMAGE_PROMPT_CHARS) {
+      return yield* new InvalidRequest({
+        message: `prompt: at most ${MAX_IMAGE_PROMPT_CHARS} characters`,
+      });
+    }
+    const n = body.n ?? 1;
+    if (!isPositiveInt(n) || n > MAX_IMAGES_PER_REQUEST) {
+      return yield* new InvalidRequest({
+        message: `n: an integer from 1 to ${MAX_IMAGES_PER_REQUEST}`,
+      });
+    }
+    const size = body.size ?? DEFAULT_IMAGE_SIZE;
+    if (!isImageSize(size)) {
+      return yield* new InvalidRequest({
+        message: `size: one of ${IMAGE_SIZES.join(", ")}`,
+      });
+    }
+    return {
+      forward: {
+        model: body.model,
+        n,
+        prompt: body.prompt,
+        response_format: "b64_json",
+        size,
+      },
+      model: body.model,
+      n,
+      prompt: body.prompt,
+      size,
+    } satisfies ImageBody;
+  });

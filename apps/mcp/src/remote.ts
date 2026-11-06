@@ -8,13 +8,17 @@ export {
   listModels,
   MarketError,
   payAndCall,
+  payForImage,
+  requestImageQuote,
   requestQuote,
   txLine,
 } from "./market.ts";
 export type {
   ChatMessage,
   ChatRequest,
+  ImageRequest,
   ModelListing,
+  PaidImage,
   Quote,
 } from "./market.ts";
 export { signPaymentAs } from "./payer.ts";

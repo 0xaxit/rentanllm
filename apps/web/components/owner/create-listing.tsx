@@ -30,6 +30,11 @@ const OPEN_MODEL_SUGGESTIONS = [
   "phi3:mini",
 ] as const;
 
+/** Image models a node can serve through a local image server (e.g. sd-server). */
+const IMAGE_MODEL_SUGGESTIONS = ["flux-2-klein-4b"] as const;
+/** Starting price per image, well under hosted image APIs for a small model. */
+const DEFAULT_PER_IMAGE = "0.002";
+
 /** Starting prices per million tokens, well under hosted APIs for small open models. */
 const DEFAULT_INPUT = "0.05";
 const DEFAULT_OUTPUT = "0.20";
@@ -84,15 +89,20 @@ export const CreateListing = ({
       accounts[0]?.id ??
       ""
   );
+  const [kind, setKind] = useState<"chat" | "image">("chat");
   const [model, setModel] = useState("");
+  const [perImageRaw, setPerImageRaw] = useState(DEFAULT_PER_IMAGE);
   const [inputRaw, setInputRaw] = useState(DEFAULT_INPUT);
   const [outputRaw, setOutputRaw] = useState(DEFAULT_OUTPUT);
   const [status, setStatus] = useState<"draft" | "live">("live");
   const [busy, setBusy] = useState(false);
 
   const account = accounts.find((a) => a.id === selected);
-  const input = parseUsdInput(inputRaw);
-  const output = parseUsdInput(outputRaw);
+  const isImage = kind === "image";
+  // An image is billed as one million output tokens, so its price per image is the
+  // output price per million and the input price is zero.
+  const input = isImage ? 0n : parseUsdInput(inputRaw);
+  const output = parseUsdInput(isImage ? perImageRaw : outputRaw);
   const valid =
     account !== undefined && model !== "" && input !== null && output !== null;
   const duplicate = listedModels(account, listings).has(model);
@@ -103,6 +113,7 @@ export const CreateListing = ({
     }
     setBusy(true);
     const result = await createListing({
+      kind,
       models: [model],
       priceCacheReadPerMtokUsdc: null,
       priceCacheWritePerMtokUsdc: null,
@@ -151,7 +162,7 @@ export const CreateListing = ({
         LIST A MODEL
       </button>
       <BottomSheet
-        kicker="SELL AN OPEN MODEL"
+        kicker={isImage ? "SELL AN IMAGE MODEL" : "SELL AN OPEN MODEL"}
         onClose={() => setOpen(false)}
         open={open}
         title="New listing"
@@ -182,6 +193,18 @@ export const CreateListing = ({
               </select>
             </div>
           )}
+          <SegmentedControl<"chat" | "image">
+            label="Kind"
+            onChange={(next) => {
+              setKind(next);
+              setModel("");
+            }}
+            segments={[
+              { label: "TEXT", value: "chat" },
+              { label: "IMAGE", value: "image" },
+            ]}
+            value={kind}
+          />
           <div className="flex flex-col gap-1.5">
             <label className="text-label text-clay" htmlFor={modelId}>
               MODEL
@@ -193,35 +216,57 @@ export const CreateListing = ({
               id={modelId}
               list={`${modelId}-open`}
               onChange={(event) => setModel(event.currentTarget.value.trim())}
-              placeholder="llama3.1:8b"
+              placeholder={isImage ? "flux-2-klein-4b" : "llama3.1:8b"}
               spellCheck={false}
               value={model}
             />
             <datalist id={`${modelId}-open`}>
-              {OPEN_MODEL_SUGGESTIONS.map((option) => (
-                <option key={option} value={option} />
-              ))}
+              {(isImage ? IMAGE_MODEL_SUGGESTIONS : OPEN_MODEL_SUGGESTIONS).map(
+                (option) => (
+                  <option key={option} value={option} />
+                )
+              )}
             </datalist>
             <Note>
-              the exact name from <code>ollama list</code> on your node
+              {isImage ? (
+                <>
+                  the model your node&apos;s image server runs (start{" "}
+                  <code>ral</code> with <code>--image-url</code>)
+                </>
+              ) : (
+                <>
+                  the exact name from <code>ollama list</code> on your node
+                </>
+              )}
               {duplicate ? " · already listed on this node" : ""}
             </Note>
           </div>
-          <div className="flex flex-wrap gap-2.75">
-            <PriceField
-              label="INPUT / M"
-              onChange={setInputRaw}
-              value={inputRaw}
-            />
-            <PriceField
-              label="OUTPUT / M"
-              onChange={setOutputRaw}
-              value={outputRaw}
-            />
-          </div>
+          {isImage ? (
+            <div className="flex flex-wrap gap-2.75">
+              <PriceField
+                label="PER IMAGE"
+                onChange={setPerImageRaw}
+                value={perImageRaw}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2.75">
+              <PriceField
+                label="INPUT / M"
+                onChange={setInputRaw}
+                value={inputRaw}
+              />
+              <PriceField
+                label="OUTPUT / M"
+                onChange={setOutputRaw}
+                value={outputRaw}
+              />
+            </div>
+          )}
           <Note>
-            USDC per million tokens · agents pay for the prompt plus the full
-            max_tokens, straight to your wallet
+            {isImage
+              ? "USDC per image · agents pay before it is made, straight to your wallet"
+              : "USDC per million tokens · agents pay for the prompt plus the full max_tokens, straight to your wallet"}
           </Note>
           <SegmentedControl<"draft" | "live">
             label="Status"

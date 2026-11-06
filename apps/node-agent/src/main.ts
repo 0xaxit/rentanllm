@@ -33,6 +33,10 @@ const start = Command.make(
       "gateway",
       "Gateway tunnel URL, e.g. wss://gw.rentanllm.com/tunnel; a bare host gets /tunnel appended (env RENTANLLM_GATEWAY_URL)"
     ),
+    imageUrl: optionalString(
+      "image-url",
+      "A local image server with OpenAI's /v1/images/generations, e.g. sd-server at http://127.0.0.1:1234, to sell image models (env RENTANLLM_IMAGE_URL)"
+    ),
     keepAwake: Flag.Boolean("keep-awake").pipe(
       Flag.withDescription(
         "Keep the machine awake while open for rentals (default on; --no-keep-awake to disable)"
@@ -68,6 +72,7 @@ const start = Command.make(
         cliProxyApiConfig: Option.getOrUndefined(flags.cliProxyApiConfig),
         cliProxyApiUrl: Option.getOrUndefined(flags.cliProxyApiUrl),
         gatewayUrl: Option.getOrUndefined(flags.gateway),
+        imageUrl: Option.getOrUndefined(flags.imageUrl),
         keepAwake: Option.getOrUndefined(flags.keepAwake),
         meterProbe: Option.getOrUndefined(flags.meterProbe),
         nodeId: Option.getOrUndefined(flags.nodeId),
@@ -100,6 +105,11 @@ const start = Command.make(
         yield* Effect.logInfo(
           `serving open models through Ollama at ${config.ollama.baseUrl} (meter probe model ${config.ollama.probeModel})`
         );
+        if (config.ollama.imageBaseUrl !== null) {
+          yield* Effect.logInfo(
+            `serving image models through ${config.ollama.imageBaseUrl}/v1/images/generations`
+          );
+        }
       }
       for (const [provider, model] of Object.entries(probeModels)) {
         yield* Effect.logInfo(

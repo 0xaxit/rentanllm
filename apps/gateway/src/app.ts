@@ -19,7 +19,9 @@ import { MirrorNodeAccounts } from "./market/hedera-accounts.ts";
 import { handleListModels } from "./market/models.ts";
 import {
   CHAT_COMPLETIONS_PATH,
+  IMAGE_GENERATIONS_PATH,
   handleChatCompletions,
+  handleImageGenerations,
 } from "./market/route.ts";
 import { SpendAuditLive } from "./market/spend-audit.ts";
 import { MarketTermsLive } from "./market/terms.ts";
@@ -115,6 +117,12 @@ const chatCompletionsRoute = HttpRouter.add(
   answerFailures(handleChatCompletions)
 );
 
+const imageGenerationsRoute = HttpRouter.add(
+  "POST",
+  IMAGE_GENERATIONS_PATH,
+  answerFailures(handleImageGenerations)
+);
+
 const modelsRoute = HttpRouter.add(
   "GET",
   "/v1/models",
@@ -184,6 +192,7 @@ const healthRoute = HttpRouter.add(
 
 const Routes = Layer.mergeAll(
   chatCompletionsRoute,
+  imageGenerationsRoute,
   modelsRoute,
   tunnelRoute,
   healthRoute

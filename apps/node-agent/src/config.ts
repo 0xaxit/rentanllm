@@ -62,6 +62,8 @@ export interface ConfigInput {
   readonly ollamaModel?: string | undefined;
   /** Ollama's address (default http://127.0.0.1:11434). */
   readonly ollamaUrl?: string | undefined;
+  /** A local OpenAI-compatible image server (e.g. sd-server); turns image listings on. */
+  readonly imageUrl?: string | undefined;
   readonly rateLimitCooloffMs?: number | undefined;
 }
 
@@ -93,6 +95,7 @@ export const configFromEnv = (env: NodeJS.ProcessEnv): ConfigInput => ({
   cliProxyApiConfig: env.RENTANLLM_CLIPROXYAPI_CONFIG,
   cliProxyApiUrl: env.RENTANLLM_CLIPROXYAPI_URL,
   gatewayUrl: env.RENTANLLM_GATEWAY_URL,
+  imageUrl: env.RENTANLLM_IMAGE_URL,
   keepAwake: parseBool(env.RENTANLLM_KEEP_AWAKE),
   meterProbe: parseBool(env.RENTANLLM_METER_PROBE),
   nodeId: env.RENTANLLM_NODE_ID,
@@ -128,6 +131,7 @@ export const readConfigFile = (configDir: string): ConfigInput => {
     cliProxyApiConfig: str(parsed.cliProxyApiConfig),
     cliProxyApiUrl: str(parsed.cliProxyApiUrl),
     gatewayUrl: str(parsed.gatewayUrl),
+    imageUrl: str(parsed.imageUrl),
     keepAwake: bool(parsed.keepAwake),
     meterProbe: bool(parsed.meterProbe),
     nodeId: str(parsed.nodeId),
@@ -155,6 +159,7 @@ export const mergeInputs = (...inputs: readonly ConfigInput[]): ConfigInput => {
     cliProxyApiPort: pick("cliProxyApiPort"),
     cliProxyApiUrl: pick("cliProxyApiUrl"),
     gatewayUrl: pick("gatewayUrl"),
+    imageUrl: pick("imageUrl"),
     keepAwake: pick("keepAwake"),
     meterProbe: pick("meterProbe"),
     nodeId: pick("nodeId"),
@@ -283,7 +288,14 @@ const resolveOllama = (input: ConfigInput): OllamaOptions | null => {
     "https:",
     "http:"
   );
-  return { baseUrl: url.origin, probeModel: model };
+  const imageUrl = input.imageUrl?.trim();
+  return {
+    baseUrl: url.origin,
+    imageBaseUrl: imageUrl
+      ? validateUrl("image server URL", imageUrl, "https:", "http:").origin
+      : null,
+    probeModel: model,
+  };
 };
 
 export const resolveConfig = (

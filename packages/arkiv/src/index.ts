@@ -26,6 +26,8 @@ import { privateKeyToAccount } from "viem/accounts";
 export const OfferSchema = defineSchema("rentanllm.offer", {
   /** `${listingId}:${model}`: one entity per model a listing sells. */
   id: str().indexed(),
+  /** "chat" (priced per million tokens) or "image" (priceOut is the price of one image). */
+  kind: str().indexed(),
   listing: str().indexed(),
   model: str().indexed(),
   /** CAIP-2 network buyers pay on, e.g. "hedera:testnet". */
@@ -71,6 +73,8 @@ export const txUrl = (hash: string): string => `${EXPLORER_URL}/tx/${hash}`;
 
 /** An offer as the gateway knows it; written to Arkiv as one entity. */
 export interface Offer {
+  /** "image": priceOut is the price of one image. Entities written before this field read as "chat". */
+  readonly kind: "chat" | "image";
   readonly listing: string;
   readonly model: string;
   readonly network: string;
@@ -128,6 +132,7 @@ export const writerAddress = (privateKey: Hex): Hex =>
 
 const offerValues = (offer: Offer) => ({
   id: offerId(offer),
+  kind: offer.kind,
   listing: offer.listing,
   model: offer.model,
   network: offer.network,
@@ -193,6 +198,7 @@ const toOffer = (row: Record<string, { value: unknown } | unknown>) => {
     (row[name] as { value: unknown } | undefined)?.value;
   return {
     key: row.$key as Hex,
+    kind: value("kind") === "image" ? "image" : "chat",
     listing: String(value("listing")),
     model: String(value("model")),
     network: String(value("network")),
@@ -215,6 +221,7 @@ export const readOffers = async (
     let query = reader
       .select({
         $key: true,
+        kind: true,
         listing: true,
         model: true,
         network: true,

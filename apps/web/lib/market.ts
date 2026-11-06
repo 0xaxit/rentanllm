@@ -24,6 +24,8 @@ export const modelsLabel = (models: readonly string[]): string => {
 /** One model on the market: its sellers, how many are online, the cheapest prices. */
 export interface MarketModel {
   readonly cheapestIn: bigint;
+  /** "image": cheapestOut is the price of one image. */
+  readonly kind: MarketOffer["kind"];
   readonly cheapestOut: bigint;
   readonly model: string;
   readonly online: number;
@@ -46,6 +48,7 @@ export const marketModels = (offers: readonly MarketOffer[]): MarketModel[] => {
           row === undefined || offer.priceOutPerMtokUsdc < row.cheapestOut
             ? offer.priceOutPerMtokUsdc
             : row.cheapestOut,
+        kind: offer.kind,
         model,
         online: (row?.online ?? 0) + online,
         sellers: (row?.sellers ?? 0) + 1,
@@ -56,3 +59,17 @@ export const marketModels = (offers: readonly MarketOffer[]): MarketModel[] => {
     (a, b) => b.online - a.online || a.model.localeCompare(b.model)
   );
 };
+
+/**
+ * A listing's price as people read it: "$0.05 · $0.20" per million tokens in and out,
+ * or "$0.002 / image" (an image is billed as one million output tokens).
+ */
+export const priceLabel = (
+  kind: MarketOffer["kind"],
+  priceIn: bigint,
+  priceOut: bigint,
+  format: (micros: bigint) => string
+): string =>
+  kind === "image"
+    ? `${format(priceOut)} / image`
+    : `${format(priceIn)} · ${format(priceOut)}`;

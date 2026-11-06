@@ -153,7 +153,7 @@ export const GatewayToNodeJson = Schema.fromJsonString(GatewayToNodeSchema);
 export const ALLOWED_PATHS: Readonly<Record<Provider, readonly string[]>> = {
   anthropic: ["/v1/messages", "/v1/messages/count_tokens"],
   google: [],
-  ollama: ["/v1/chat/completions"],
+  ollama: ["/v1/chat/completions", "/v1/images/generations"],
   // A Codex subscription is served through CLIProxyAPI, which speaks the Messages API.
   openai: ["/v1/chat/completions", "/v1/responses", "/v1/messages"],
   xai: ["/v1/chat/completions", "/v1/responses"],

@@ -4,6 +4,7 @@ import { offerId, planOfferSync } from "../src/index";
 import type { Offer } from "../src/index";
 
 const offer = (listing: string, model: string): Offer => ({
+  kind: "chat",
   listing,
   model,
   network: "hedera:testnet",

@@ -52,6 +52,9 @@ export const provider = pgEnum("provider", [
   "xai",
   "ollama",
 ]);
+/** What a listing sells: chat completions, priced per token, or images, priced per image. */
+export const listingKind = pgEnum("listing_kind", ["chat", "image"]);
+
 export const authKind = pgEnum("auth_kind", [
   "oauth",
   "session_token",
@@ -157,6 +160,12 @@ export const listings = pgTable(
   "listings",
   {
     id: id(),
+    /**
+     * "image": the model makes images on POST /v1/images/generations, and
+     * price_out_per_mtok_usdc is the price of one image (an image is billed as one
+     * million output tokens, so every price and receipt path stays the same).
+     */
+    kind: listingKind("kind").notNull().default("chat"),
     maxConcurrency: integer("max_concurrency").notNull().default(1),
     models: text("models").array().notNull(),
     /** Cache-read price. Null: the gateway prices cache reads at input ÷ 10. */

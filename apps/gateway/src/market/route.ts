@@ -1,5 +1,6 @@
 /**
- * POST /v1/chat/completions: the pay-per-request market. No account, booking or API key:
+ * POST /v1/chat/completions and POST /v1/images/generations: the pay-per-request market.
+ * No account, booking or API key:
  *
  *   body (400) -> model sold? (404) -> a seller online and payable? (503)
  *   -> no payment yet: 402 with the cheapest online sellers' terms
@@ -52,16 +53,65 @@ import {
 import { ArkivMirror } from "./arkiv-mirror.ts";
 import { policyRefusal } from "./buyer-policy.ts";
 import {
+  IMAGE_OUTPUT_TOKENS,
   parseChatBody,
+  parseImageBody,
   quotedInputTokens,
   quotePrice,
   withEnforcedCap,
 } from "./quote.ts";
-import type { ChatBody } from "./quote.ts";
+import type { ChatBody, ImageBody } from "./quote.ts";
 import { SpendAudit } from "./spend-audit.ts";
 import { MarketTerms } from "./terms.ts";
 
 export const CHAT_COMPLETIONS_PATH = "/v1/chat/completions";
+export const IMAGE_GENERATIONS_PATH = "/v1/images/generations";
+
+/** One request the market prices, routes and forwards: a chat completion or an image. */
+interface PricedRequest {
+  /** What the 402's resource says the buyer is paying for. */
+  readonly description: string;
+  readonly dueMessage: string;
+  readonly forwardBody: string;
+  readonly kind: MarketOffer["kind"];
+  /** The output cap the price covers, recorded with the purchase (tokens; for images, images x 1M). */
+  readonly maxTokens: number;
+  readonly model: string;
+  readonly path: string;
+  readonly price: (offer: MarketOffer) => Micros;
+  readonly stream: boolean;
+}
+
+const chatRequest = (body: ChatBody): PricedRequest => {
+  const inputTokens = quotedInputTokens(body.messages);
+  return {
+    description: `One ${body.model} chat completion of up to ${body.maxTokens} output tokens, paid to the seller.`,
+    dueMessage: `This request covers your prompt plus up to ${body.maxTokens} output tokens.`,
+    forwardBody: withEnforcedCap(body),
+    kind: "chat",
+    maxTokens: body.maxTokens,
+    model: body.model,
+    path: CHAT_COMPLETIONS_PATH,
+    price: (offer) => quotePrice(offer.prices, inputTokens, body.maxTokens),
+    stream: body.stream,
+  };
+};
+
+const imageRequest = (body: ImageBody): PricedRequest => {
+  const units = body.n * IMAGE_OUTPUT_TOKENS;
+  const images = body.n === 1 ? "image" : "images";
+  return {
+    description: `${body.n} ${body.model} ${images} at ${body.size}, paid to the seller.`,
+    dueMessage: `This request covers ${body.n} ${images} at ${body.size}.`,
+    forwardBody: JSON.stringify(body.forward),
+    kind: "image",
+    maxTokens: units,
+    model: body.model,
+    path: IMAGE_GENERATIONS_PATH,
+    price: (offer) => quotePrice(offer.prices, 0, units),
+    stream: false,
+  };
+};
 
 /** One seller's price for this request and how to pay it. */
 interface Quote {
@@ -72,14 +122,14 @@ interface Quote {
 
 /** Buyers' budgets and per-seller limits cover this rolling window. */
 const BUYER_WINDOW_MS = 24 * 60 * 60 * 1000;
-const servesChat = (offer: MarketOffer) =>
-  ALLOWED_PATHS[offer.provider].includes(CHAT_COMPLETIONS_PATH);
+const serves = (body: PricedRequest) => (offer: MarketOffer) =>
+  offer.kind === body.kind && ALLOWED_PATHS[offer.provider].includes(body.path);
 
 /** The cheapest online, payable sellers of the body's model, cheapest first. */
-const quotesFor = (market: MarketSettings, body: ChatBody) =>
+const quotesFor = (market: MarketSettings, body: PricedRequest) =>
   Effect.gen(function* quoteSellers() {
     const offers = (yield* (yield* MarketStore).offers(body.model)).filter(
-      servesChat
+      serves(body)
     );
     if (offers.length === 0) {
       return yield* new NotFound({
@@ -98,12 +148,8 @@ const quotesFor = (market: MarketSettings, body: ChatBody) =>
         message: `No seller of ${body.model} is online right now. Try again later.`,
       });
     }
-    const inputTokens = quotedInputTokens(body.messages);
     const priced = online
-      .map((offer) => ({
-        amountMicros: quotePrice(offer.prices, inputTokens, body.maxTokens),
-        offer,
-      }))
+      .map((offer) => ({ amountMicros: body.price(offer), offer }))
       .toSorted((a, b) => (a.amountMicros < b.amountMicros ? -1 : 1))
       .slice(0, market.maxQuotedOffers);
     const terms = yield* MarketTerms;
@@ -124,7 +170,7 @@ const quotesFor = (market: MarketSettings, body: ChatBody) =>
 
 const paymentDue = (
   market: MarketSettings,
-  body: ChatBody,
+  body: PricedRequest,
   quotes: readonly Quote[],
   message: string
 ) =>
@@ -134,7 +180,7 @@ const paymentDue = (
       accepts: quotes.map((quote) => quote.requirements),
       error: message,
       resource: {
-        description: `One ${body.model} chat completion of up to ${body.maxTokens} output tokens, paid to the seller.`,
+        description: body.description,
         mimeType: "application/json",
         url: market.resourceUrl,
       },
@@ -162,7 +208,7 @@ const recordPaid = (
   mirror: ArkivMirror["Service"],
   audit: SpendAudit["Service"],
   quote: Quote,
-  body: ChatBody,
+  body: PricedRequest,
   settled: Settlement,
   requestId: string
 ) =>
@@ -241,7 +287,13 @@ const recordPaid = (
     )
   );
 
-export const handleChatCompletions = Effect.gen(function* handleChat() {
+const handleMarket = <E, R>(
+  parse: (
+    raw: string,
+    market: MarketSettings
+  ) => Effect.Effect<PricedRequest, E, R>
+) =>
+  Effect.gen(function* handleMarketRequest() {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const settings = yield* Settings;
   const { market } = settings;
@@ -255,17 +307,12 @@ export const handleChatCompletions = Effect.gen(function* handleChat() {
   if (Buffer.byteLength(raw, "utf-8") > settings.maxBodyBytes) {
     return yield* new InvalidRequest({ message: "Request body is too large." });
   }
-  const body = yield* parseChatBody(raw, market);
+  const body = yield* parse(raw, market);
   const quotes = yield* quotesFor(market, body);
 
   const header = extractPaymentHeader(request.headers);
   if (header === null) {
-    return yield* paymentDue(
-      market,
-      body,
-      quotes,
-      `This request covers your prompt plus up to ${body.maxTokens} output tokens.`
-    );
+    return yield* paymentDue(market, body, quotes, body.dueMessage);
   }
   const refuse = (reason: string) =>
     paymentDue(market, body, quotes, `Payment not accepted: ${reason}.`);
@@ -334,11 +381,11 @@ export const handleChatCompletions = Effect.gen(function* handleChat() {
     "x-rentanllm-request-id": requestId,
   };
   return yield* proxyToNode({
-    body: withEnforcedCap(body),
+    body: body.forwardBody,
     bookingId: offer.listingId,
     headers: forwardableRequestHeaders(request.headers),
     nodeId: offer.nodeId,
-    path: CHAT_COMPLETIONS_PATH,
+    path: body.path,
     provider: offer.provider,
     record: recordPaid(
       store,
@@ -361,4 +408,12 @@ export const handleChatCompletions = Effect.gen(function* handleChat() {
       )
     )
   );
-}).pipe(Effect.withSpan("gateway.chat_completions"));
+  });
+
+export const handleChatCompletions = handleMarket((raw, market) =>
+  parseChatBody(raw, market).pipe(Effect.map(chatRequest))
+).pipe(Effect.withSpan("gateway.chat_completions"));
+
+export const handleImageGenerations = handleMarket((raw, market) =>
+  parseImageBody(raw, market).pipe(Effect.map(imageRequest))
+).pipe(Effect.withSpan("gateway.image_generations"));
