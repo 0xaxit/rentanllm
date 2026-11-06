@@ -105,6 +105,37 @@ export const listModels = async (
   return body.data;
 };
 
+const quoteAt = async (
+  url: string,
+  body: string,
+  network: PayNetwork,
+  model: string
+): Promise<Quote> => {
+  const response = await fetch(url, {
+    body,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  if (response.status !== 402) {
+    throw new MarketError(await errorMessage(response));
+  }
+  const header = response.headers.get("payment-required");
+  if (header === null) {
+    throw new MarketError("the gateway's 402 carried no payment terms");
+  }
+  const paymentRequired = decodePaymentRequiredHeader(header);
+  const payable = paymentRequired.accepts
+    .filter((terms) => terms.network === network)
+    .toSorted((a, b) => (BigInt(a.amount) < BigInt(b.amount) ? -1 : 1));
+  const [terms] = payable;
+  if (terms === undefined) {
+    throw new MarketError(
+      `no seller of ${model} can be paid on ${network} right now`
+    );
+  }
+  return { paymentRequired, terms };
+};
+
 /** Asks for the price: an unpaid request, which the gateway answers with a 402. */
 export const requestQuote = async (
   gatewayUrl: string,
@@ -195,37 +226,6 @@ export const payForImage = async (
     base64,
     error: base64 === null ? "the seller returned no image" : null,
   };
-};
-
-const quoteAt = async (
-  url: string,
-  body: string,
-  network: PayNetwork,
-  model: string
-): Promise<Quote> => {
-  const response = await fetch(url, {
-    body,
-    headers: { "content-type": "application/json" },
-    method: "POST",
-  });
-  if (response.status !== 402) {
-    throw new MarketError(await errorMessage(response));
-  }
-  const header = response.headers.get("payment-required");
-  if (header === null) {
-    throw new MarketError("the gateway's 402 carried no payment terms");
-  }
-  const paymentRequired = decodePaymentRequiredHeader(header);
-  const payable = paymentRequired.accepts
-    .filter((terms) => terms.network === network)
-    .toSorted((a, b) => (BigInt(a.amount) < BigInt(b.amount) ? -1 : 1));
-  const [terms] = payable;
-  if (terms === undefined) {
-    throw new MarketError(
-      `no seller of ${model} can be paid on ${network} right now`
-    );
-  }
-  return { paymentRequired, terms };
 };
 
 interface ChatCompletion {

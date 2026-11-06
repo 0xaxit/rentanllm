@@ -49,7 +49,9 @@ describe("list_models from Arkiv", () => {
       source: "arkiv",
       writer: "0x7A67",
     });
-    expect(text).toContain("This is the complete list, read from the public Arkiv board");
+    expect(text).toContain(
+      "This is the complete list, read from the public Arkiv board"
+    );
     expect(text).toContain("https://rabdi.explorer.arkiv.network/entity/0xb");
     expect(
       modelsText({ models: [], source: "gateway", writer: null })

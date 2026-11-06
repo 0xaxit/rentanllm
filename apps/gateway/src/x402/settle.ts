@@ -122,7 +122,5 @@ export const settleAgainst = <E = never>(
   beforeSettle?: BeforeSettle<E>
 ) =>
   verifyAgainst(payload, requirements, beforeSettle).pipe(
-    Effect.flatMap(({ payer }) =>
-      settleVerified(payload, requirements, payer)
-    )
+    Effect.flatMap(({ payer }) => settleVerified(payload, requirements, payer))
   );

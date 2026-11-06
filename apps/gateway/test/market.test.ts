@@ -1,6 +1,7 @@
 import { once } from "node:events";
 import { createServer } from "node:http";
 import type { Server } from "node:http";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import type { PaymentRequirements } from "@x402/core/types";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -491,9 +492,7 @@ describe("market on Hedera testnet", () => {
     expect(response.headers.get("x-rentanllm-paid-usdc")).toBeNull();
     expect(await response.text()).toContain("Nothing was charged");
     // Give a stray recording time to land, then check none did.
-    await new Promise((resolve) => {
-      setTimeout(resolve, 200);
-    });
+    await sleep(200);
     expect(
       gw.state.paid.some((p) => p.paymentTx === fakeTxHash("nonce-broken"))
     ).toBe(false);
