@@ -165,6 +165,11 @@ The gateway writes the live offers and one receipt per paid request to Arkiv's R
   bun packages/arkiv/scripts/query.ts 0x7A67B250ECa8Ed822B8439b331f8Eff22c1C20F8
   ```
 
+## Future scope
+
+- **Multi-agent negotiation before payment (A2A or ACP).** Today an agent pays the cheapest quote in the 402. Next, a buyer agent and a seller agent would negotiate over A2A or ACP before any money moves: price, max tokens, deadline, retries and a refund policy. The agreed terms would become the x402 payment and be posted to Arkiv with the receipt.
+- **Refunds for partial failures.** Buyers already pay only once the seller answers successfully. A seller that fails partway through a streamed answer could refund the unused part automatically.
+
 ## AI use
 
 The code was written with Claude Code (Anthropic) working in this repo, under the team's direction. The team chose the product, the architecture and every trade-off, reviewed each change, ran the seller node and the paid tests, and did the design work in Paper.
