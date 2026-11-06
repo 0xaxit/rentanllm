@@ -1,7 +1,6 @@
 "use client";
 
 import { AppProviders } from "./app-providers";
-import { requestRoleChoice } from "./role-choice-request";
 import { SignInButton } from "./sign-in-button";
 
 /**
@@ -12,7 +11,7 @@ import { SignInButton } from "./sign-in-button";
  */
 const WalletIsland = () => (
   <AppProviders>
-    <SignInButton onSignInStart={requestRoleChoice} />
+    <SignInButton />
   </AppProviders>
 );
 

@@ -11,7 +11,6 @@ import { makeSiweConfig } from "@/lib/siwe";
 import { palette } from "@/lib/tokens";
 
 import { ToastProvider } from "../app-shell/toast";
-import { RoleChooser } from "./role-chooser";
 import { appChain, wagmiConfig } from "./wagmi-config";
 
 /** ConnectKit modal themed to the departures-board palette. */
@@ -71,10 +70,7 @@ export const AppProviders = ({ children }: { children: ReactNode }) => {
             }}
             theme="minimal"
           >
-            <ToastProvider>
-              {children}
-              <RoleChooser />
-            </ToastProvider>
+            <ToastProvider>{children}</ToastProvider>
           </ConnectKitProvider>
         </SIWEProvider>
       </QueryClientProvider>
