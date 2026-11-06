@@ -1,6 +1,6 @@
 # rentanllm-mcp
 
-An MCP server that lets an agent in Claude Desktop, Claude Code, Cursor or any other MCP client buy inference on the RentAnLLM market, one request at a time. Every payment is capped, and every payment waits for the person at the Mac to approve it with Touch ID.
+An MCP server that lets an agent in Claude Desktop, Claude Code, Cursor or any other MCP client buy inference on the RentAnLLM market, one request at a time. Every payment is capped. Who approves it is up to you: Touch ID for every payment, the person only above a set amount, or nobody inside the caps.
 
 ## Tools
 
@@ -9,6 +9,7 @@ An MCP server that lets an agent in Claude Desktop, Claude Code, Cursor or any o
 | `list_models` | no | Models for sale, sellers online, cheapest prices |
 | `quote_inference` | no | What one request would cost and who would be paid |
 | `buy_inference` | yes | Pays the seller and returns the answer with its payment receipt |
+| `approve_payment` | yes | Pays a request that `buy_inference` held for the person's approval |
 | `spending` | no | Spend in the last 24 hours, the caps, the latest payments with explorer links |
 
 `buy_inference` runs in this order, and a refusal at any step costs nothing:
@@ -18,6 +19,42 @@ An MCP server that lets an agent in Claude Desktop, Claude Code, Cursor or any o
 3. Show the Touch ID prompt, which names the amount, the recipient and the network.
 4. Only then read the key, sign that one payment and send the request.
 5. Record the payment in `spend.jsonl`. A payment counts even when the seller then fails to answer.
+
+## Approval above a threshold
+
+With `RENTANLLM_MCP_APPROVAL=threshold`, small payments go through on their own and larger ones wait for the person:
+
+| Price of the request | What happens |
+| --- | --- |
+| Up to `RENTANLLM_MCP_AUTO_APPROVE_USDC` (default `0.001`) | Paid at once, inside the caps |
+| Above it, and the client supports MCP elicitation (Claude Code) | The client shows "Pay 0.0123 USDC to 0.0.x on Hedera testnet …?". Nothing is paid unless the person confirms |
+| Above it, and the client cannot show that dialog | `buy_inference` holds the payment and returns a `payment_id`. The agent then calls `approve_payment` with that id, the amount and the recipient, and the client shows its own approval dialog with those arguments |
+
+The per-request and 24-hour caps apply on top in every case.
+
+`approve_payment` pays only when the id, amount and recipient match the held payment exactly. A hold expires after 5 minutes and can be used once. The price is fetched again before paying and may not have gone up.
+
+In Claude Desktop, allow `buy_inference` and leave `approve_payment` on **Always ask**. That way the agent buys small answers on its own, and every larger payment stops at a Confirm/Deny dialog. Keep the key in a file only you can read:
+
+```json
+{
+  "mcpServers": {
+    "rentanllm": {
+      "command": "bun",
+      "args": ["/path/to/rentanllm/apps/mcp/src/main.ts"],
+      "env": {
+        "RENTANLLM_GATEWAY_URL": "https://gw.31-97-230-118.sslip.io",
+        "RENTANLLM_MCP_ACCOUNT": "0.0.12345",
+        "RENTANLLM_MCP_APPROVAL": "threshold",
+        "RENTANLLM_MCP_AUTO_APPROVE_USDC": "0.001",
+        "RENTANLLM_MCP_KEY_FILE": "~/.config/rentanllm/wallets/buyer.json",
+        "RENTANLLM_MCP_MAX_PER_REQUEST_USDC": "0.05",
+        "RENTANLLM_MCP_MAX_PER_DAY_USDC": "1"
+      }
+    }
+  }
+}
+```
 
 ## Autonomous agent
 
@@ -96,12 +133,13 @@ ChatGPT can only connect to MCP servers hosted on the internet, and a hosted ser
 | `RENTANLLM_MCP_MAX_PER_DAY_USDC` | `1` | Most paid in any 24 hours |
 | `RENTANLLM_MCP_STATE_DIR` | `~/.config/rentanllm/mcp` | Where `spend.jsonl` is kept |
 | `RENTANLLM_MCP_SIGNER` | `dist/rentanllm-signer` | The approval helper |
-| `RENTANLLM_MCP_APPROVAL` | `touchid` | `none` pays without a person, inside the caps (the `agent` command needs it). Also needs `RENTANLLM_MCP_PRIVATE_KEY` or `RENTANLLM_MCP_KEY_FILE` |
-| `RENTANLLM_MCP_KEY_FILE` |  | With approval `none`: a file holding the payer key, raw or as JSON with `privateKeyHex` |
+| `RENTANLLM_MCP_APPROVAL` | `touchid` | `touchid`: Touch ID for every payment. `threshold`: the person approves only above `RENTANLLM_MCP_AUTO_APPROVE_USDC`. `none`: no person, the caps are the only limit (the `agent` command needs it). `threshold` and `none` also need `RENTANLLM_MCP_PRIVATE_KEY` or `RENTANLLM_MCP_KEY_FILE` |
+| `RENTANLLM_MCP_AUTO_APPROVE_USDC` | `0.001` | With approval `threshold`: the largest payment made without asking |
+| `RENTANLLM_MCP_KEY_FILE` |  | With approval `threshold` or `none`: a file holding the payer key, raw or as JSON with `privateKeyHex` |
 
 ## Development
 
 ```sh
-bun run test        # caps, the purchase order of steps, the spend log, config
+bun run test        # caps, the purchase order of steps, approval threshold, held payments, config
 bun run typecheck
 ```

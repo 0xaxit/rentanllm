@@ -16,7 +16,8 @@ import type { Caps, SpendEntry } from "./spend.ts";
 import { capRefusal, spentLastDay } from "./spend.ts";
 
 export interface BuyParts {
-  readonly approve: (reason: string) => Promise<string>;
+  /** Returns the key once this payment may go ahead; throws to stop it. */
+  readonly approve: (reason: string, quote: Quote) => Promise<string>;
   readonly call: (payment: PaymentPayload) => Promise<PaidAnswer>;
   readonly caps: Caps;
   readonly log: (entry: SpendEntry) => void;
@@ -69,7 +70,8 @@ export const buyInference = async (
     return { kind: "refused", reason: refusal };
   }
   const key = await parts.approve(
-    approvalReason(quote, request, spent, parts.caps)
+    approvalReason(quote, request, spent, parts.caps),
+    quote
   );
   const payment = await parts.sign(key, quote);
   const answer = await parts.call(payment);

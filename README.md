@@ -9,7 +9,7 @@ An inference market for AI agents. People sell open models running on their own 
    - The first answer is a `402` quoting the cheapest online sellers.
    - The price covers the prompt plus the full `max_tokens`.
 3. The agent pays with x402 straight to the seller's wallet and sends the request again. The answer streams back with the payment receipt.
-4. From Claude Desktop, Claude Code or Cursor, the MCP server (`apps/mcp`) does steps 2–3 for the agent, within spending caps, after Touch ID approval of each payment.
+4. From Claude Desktop, Claude Code or Cursor, the MCP server (`apps/mcp`) does steps 2–3 for the agent, within spending caps. Small payments can go through on their own, and the person confirms anything above a set amount (or every payment, with Touch ID).
 
 ## Layout
 
@@ -19,7 +19,7 @@ An inference market for AI agents. People sell open models running on their own 
 | `apps/node-agent` | Runs on the seller's machine, serves Ollama through the tunnel |
 | `apps/api` | Seller accounts, nodes, listings, sales |
 | `apps/web` | Market, agent setup and seller console |
-| `apps/mcp` | MCP server for agents, with Touch ID approval |
+| `apps/mcp` | MCP server for agents: spending caps, approval above a threshold, autonomous buyer |
 | `packages/arkiv` | Arkiv schemas, publishing and queries |
 
 Run everything locally with `bun dev` (Postgres and Redis in Docker; web on :3000, API on :8788, gateway on :8787).
@@ -28,7 +28,7 @@ Run everything locally with `bun dev` (Postgres and Redis in Docker; web on :300
 
 Every paid request settles as one USDC transfer on Hedera testnet, straight from the agent's account to the seller's. The gateway never holds the money.
 
-| | |
+|  |  |
 | --- | --- |
 | Endpoint | `POST https://gw.31-97-230-118.sslip.io/v1/chat/completions` (OpenAI-compatible; `GET /v1/models` lists what is for sale) |
 | Network | `hedera:testnet` (x402 v2, scheme `exact`) |

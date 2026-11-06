@@ -1,7 +1,7 @@
 /**
  * MCP server settings, from the environment (an MCP client passes them in its server
- * config). Every payment is capped per request and per rolling 24 hours, and needs the
- * person's approval unless approval is explicitly turned off for development.
+ * config). Every payment is capped per request and per rolling 24 hours. Who approves a
+ * payment depends on `Approval`.
  */
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -12,15 +12,23 @@ import { fileURLToPath } from "node:url";
 export type PayNetwork = "hedera:testnet";
 
 /** How a payment is approved before its key is released. */
-export type Approval = "touchid" | "none";
+/**
+ * - `touchid`: the person approves every payment with Touch ID.
+ * - `threshold`: payments up to `autoApproveMicros` go through on their own; larger ones
+ *   wait for the person to confirm in the MCP client (see approval.ts).
+ * - `none`: no person; the caps are the only limit (the autonomous `agent` command).
+ */
+export type Approval = "touchid" | "threshold" | "none";
 
 export interface McpConfig {
   /** Hedera account that pays (0.0.x). */
   readonly account: string;
   readonly approval: Approval;
+  /** With approval "threshold": the largest payment made without asking the person. */
+  readonly autoApproveMicros: bigint;
   /** Gateway base URL, without /v1. */
   readonly gatewayUrl: string;
-  /** Development only, with approval "none": the payer key itself. */
+  /** With approval "threshold" or "none": the payer key, from env or a key file. */
   readonly insecureKey: string | null;
   readonly maxPerDayMicros: bigint;
   readonly maxPerRequestMicros: bigint;
@@ -34,6 +42,7 @@ export interface McpConfig {
 const DEFAULT_GATEWAY_URL = "http://localhost:8787";
 const DEFAULT_MAX_PER_REQUEST_USDC = "0.05";
 const DEFAULT_MAX_PER_DAY_USDC = "1";
+const DEFAULT_AUTO_APPROVE_USDC = "0.001";
 const MICROS_PER_USDC = 1_000_000n;
 const USDC_AMOUNT = /^(?<whole>\d+)(?:\.(?<fraction>\d{1,6}))?$/u;
 const HEDERA_ACCOUNT = /^\d+\.\d+\.\d+$/u;
@@ -117,24 +126,30 @@ const keyWithoutApproval = (env: NodeJS.ProcessEnv): string | null => {
 };
 
 /**
- * Touch ID unless explicitly off. "none" pays without a person, inside the caps; it needs
- * the key in RENTANLLM_MCP_PRIVATE_KEY or RENTANLLM_MCP_KEY_FILE.
+ * Touch ID unless set otherwise. "threshold" and "none" read the key without Touch ID, so
+ * they need it in RENTANLLM_MCP_PRIVATE_KEY or RENTANLLM_MCP_KEY_FILE.
  */
 const parseApproval = (
   env: NodeJS.ProcessEnv
 ): { readonly approval: Approval; readonly insecureKey: string | null } => {
-  if (env.RENTANLLM_MCP_APPROVAL === "none") {
+  const mode = env.RENTANLLM_MCP_APPROVAL ?? "touchid";
+  if (mode === "none" || mode === "threshold") {
     const insecureKey = keyWithoutApproval(env);
     if (insecureKey === null) {
       throw new ConfigError(
-        "RENTANLLM_MCP_APPROVAL=none needs RENTANLLM_MCP_PRIVATE_KEY or RENTANLLM_MCP_KEY_FILE"
+        `RENTANLLM_MCP_APPROVAL=${mode} needs RENTANLLM_MCP_PRIVATE_KEY or RENTANLLM_MCP_KEY_FILE`
       );
     }
-    return { approval: "none", insecureKey };
+    return { approval: mode, insecureKey };
+  }
+  if (mode !== "touchid") {
+    throw new ConfigError(
+      `RENTANLLM_MCP_APPROVAL must be touchid, threshold or none, not ${mode}`
+    );
   }
   if (process.platform !== "darwin") {
     throw new ConfigError(
-      "Touch ID approval needs macOS; on other systems set RENTANLLM_MCP_APPROVAL=none for development"
+      "Touch ID approval needs macOS; elsewhere set RENTANLLM_MCP_APPROVAL=threshold or none"
     );
   }
   return { approval: "touchid", insecureKey: null };
@@ -145,6 +160,9 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): McpConfig => {
   return {
     account: parseAccount(env),
     ...parseApproval(env),
+    autoApproveMicros: usdcToMicros(
+      env.RENTANLLM_MCP_AUTO_APPROVE_USDC ?? DEFAULT_AUTO_APPROVE_USDC
+    ),
     gatewayUrl: (env.RENTANLLM_GATEWAY_URL ?? DEFAULT_GATEWAY_URL)
       .replace(TRAILING_SLASHES, "")
       .replace(V1_SUFFIX, ""),

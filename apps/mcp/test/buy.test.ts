@@ -68,9 +68,9 @@ const fakeParts = (
   const ran: string[] = [];
   const logged: SpendEntry[] = [];
   const parts: BuyParts = {
-    approve: async (reason) => {
+    approve: async (reason, quote) => {
       ran.push(`approve: ${reason}`);
-      return await approve(reason);
+      return await approve(reason, quote);
     },
     call: (payment) => {
       ran.push("call");

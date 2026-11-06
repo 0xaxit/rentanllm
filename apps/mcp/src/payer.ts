@@ -40,16 +40,16 @@ const exitCode = (error: unknown): number | null =>
     : null;
 
 /**
- * Shows the system approval prompt with `reason` and returns the key once the person
- * approves; throws a `not_approved` PayerError when they deny or let it time out.
+ * Returns the payer key. With Touch ID it first shows the system prompt with `reason` and
+ * waits for the person to approve; throws a `not_approved` PayerError when they deny or let it time out.
  */
 export const approvedKey = async (
   config: McpConfig,
   reason: string
 ): Promise<string> => {
-  if (config.approval === "none") {
+  if (config.approval !== "touchid") {
     if (config.insecureKey === null) {
-      throw new PayerError("setup", "no development key configured");
+      throw new PayerError("setup", "no payer key configured");
     }
     return config.insecureKey;
   }
