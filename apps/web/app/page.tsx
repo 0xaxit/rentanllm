@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
 
+import { AvailableNow } from "@/components/landing/available-now";
 import { InstallCommand } from "@/components/landing/install-command";
-import { LiveMarket } from "@/components/landing/live-market";
 import { RoleButtons } from "@/components/landing/role-buttons";
 import { SiteFooter } from "@/components/landing/site-footer";
 import {
@@ -16,7 +16,7 @@ import { DuskDither } from "@/components/shaders/shader-slots";
 import { ConnectWallet } from "@/components/wallet/connect-wallet";
 import { cx } from "@/lib/cx";
 
-/** Sellers come and go; the live strip is at most this many seconds old. */
+/** Sellers come and go; the "available now" table is at most this many seconds old. */
 export const revalidate = 30;
 
 const STEPS = [
@@ -107,9 +107,6 @@ const Hero = () => (
         in USDC, with no account and no API key.
       </p>
       <Note>x402 payments on Hedera · spending caps for agents</Note>
-      <Suspense fallback={null}>
-        <LiveMarket />
-      </Suspense>
       <div className="flex flex-col gap-2 pt-2">
         <RoleButtons />
         <div className="flex flex-col md:hidden">
@@ -185,6 +182,9 @@ const LandingPage = () => (
     <main>
       <Hero />
       <DuskBand />
+      <Suspense fallback={null}>
+        <AvailableNow />
+      </Suspense>
       <HowItWorks />
     </main>
     <SiteFooter />
