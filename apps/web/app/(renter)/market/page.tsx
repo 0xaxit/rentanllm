@@ -13,9 +13,9 @@ import {
   Note,
 } from "@/components/primitives";
 import { getMarketOffers, getPaidRequests } from "@/lib/api/queries";
-import type { MarketOffer } from "@/lib/api/types";
 import { getArkivBoard } from "@/lib/arkiv";
 import { GATEWAY_API_BASE } from "@/lib/env";
+import { marketModels } from "@/lib/market";
 import { formatPrice } from "@/lib/money";
 
 export const metadata: Metadata = {
@@ -26,41 +26,6 @@ export const metadata: Metadata = {
 
 // Prices and the payment feed change by the request.
 export const dynamic = "force-dynamic";
-
-interface ModelRow {
-  readonly cheapestIn: bigint;
-  readonly cheapestOut: bigint;
-  readonly model: string;
-  readonly online: number;
-  readonly sellers: number;
-}
-
-/** One row per model: how many sellers, how many online, the cheapest prices. */
-const byModel = (offers: readonly MarketOffer[]): ModelRow[] => {
-  const rows = new Map<string, ModelRow>();
-  for (const offer of offers) {
-    const online = offer.nodeStatus === "online" ? 1 : 0;
-    for (const model of offer.models) {
-      const row = rows.get(model);
-      rows.set(model, {
-        cheapestIn:
-          row === undefined || offer.priceInPerMtokUsdc < row.cheapestIn
-            ? offer.priceInPerMtokUsdc
-            : row.cheapestIn,
-        cheapestOut:
-          row === undefined || offer.priceOutPerMtokUsdc < row.cheapestOut
-            ? offer.priceOutPerMtokUsdc
-            : row.cheapestOut,
-        model,
-        online: (row?.online ?? 0) + online,
-        sellers: (row?.sellers ?? 0) + 1,
-      });
-    }
-  }
-  return [...rows.values()].toSorted(
-    (a, b) => b.online - a.online || a.model.localeCompare(b.model)
-  );
-};
 
 const callSnippet = (model: string) =>
   [
@@ -77,7 +42,7 @@ const MarketPage = async () => {
     getPaidRequests(),
     getArkivBoard(),
   ]);
-  const models = offers.ok ? byModel(offers.data) : [];
+  const models = offers.ok ? marketModels(offers.data) : [];
   const example = models.find((row) => row.online > 0)?.model ?? "llama3.1:8b";
   return (
     <AppMain>
