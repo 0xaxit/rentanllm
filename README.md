@@ -11,6 +11,41 @@ An inference market for AI agents. People sell open models running on their own 
 3. The agent pays with x402 straight to the seller's wallet and sends the request again. The answer streams back with the payment receipt.
 4. From Claude Desktop, Claude Code or Cursor, the MCP server (`apps/mcp`) does steps 2–3 for the agent, within spending caps. Small payments can go through on their own, and the person confirms anything above a set amount (or every payment, with Touch ID).
 
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Buyers
+    agent["AI agent<br/>(x402 client)"]
+    claude["Claude Desktop<br/>/ Code / Cursor"]
+  end
+  subgraph RentAnLLM
+    web["apps/web<br/>market + seller console"]
+    api["apps/api<br/>accounts, listings,<br/>remote MCP + OAuth"]
+    gw["apps/gateway<br/>x402 route + tunnel"]
+    db[("Postgres")]
+  end
+  subgraph Seller machine
+    node["apps/node-agent"]
+    ollama["Ollama"]
+  end
+  hedera[["Hedera testnet<br/>USDC, HCS audit log,<br/>ERC-8004 registries"]]
+  arkiv[["Arkiv Rabdi<br/>offers + receipts"]]
+
+  agent -- "POST /v1/chat/completions<br/>402 quote, then paid retry" --> gw
+  claude -- "MCP over HTTPS<br/>(OAuth sign-in)" --> api
+  api -- "pays with the user's<br/>agent wallet" --> gw
+  gw -- "settles USDC via<br/>x402 facilitator" --> hedera
+  gw -- "WebSocket tunnel" --> node --> ollama
+  gw -- "writes offers every 3 min,<br/>one receipt per sale" --> arkiv
+  web -- "reads offers and<br/>receipts directly" --> arkiv
+  api -- "list_models reads" --> arkiv
+  web -- "SIWE sign-in,<br/>listings, budgets" --> api
+  api --- db
+  gw --- db
+  api -- "posts seller reputation" --> hedera
+```
+
 ## Layout
 
 | Path | What |
@@ -120,7 +155,22 @@ The gateway writes the live offers and one receipt per paid request to Arkiv's R
 
 ## AI use
 
-Much of this code was written with Claude Code (Anthropic), under the team's direction and review.
+The code was written with Claude Code (Anthropic) working in this repo, under the team's direction. The team chose the product, the architecture and every trade-off, reviewed each change, ran the seller node and the paid tests, and did the design work in Paper.
+
+What Claude Code wrote, by area:
+
+| Area | Files | Written by Claude Code |
+| --- | --- | --- |
+| x402 gateway and pricing | `apps/gateway`, `packages/core`, `packages/protocol` | Most of the code and tests |
+| Seller node agent | `apps/node-agent` | Most of the code |
+| Control-plane API | `apps/api`, `packages/api-contract`, `packages/db` | Most of the code and tests, including the remote MCP server and OAuth (`apps/api/src/mcp`, `apps/api/src/services/oauth.ts`), agent wallets (`apps/api/src/hedera`) and ERC-8004 / HCS-14 (`apps/api/src/reputation`) |
+| MCP client and buyer agent | `apps/mcp` | Most of the code |
+| Arkiv | `packages/arkiv`, `arkiv/*.md` | The schemas, sync, queries and docs |
+| Web app | `apps/web` | The pages and components, built from the team's designs |
+| Deploy | `deploy/`, `.github/` | The compose files and CI workflows |
+| Docs | `README.md`, `arkiv/` | First drafts, edited by the team |
+
+The team's own work: the idea and the market design (per-request pricing that covers `max_tokens`, paying the seller directly, receipts on Arkiv), the visual design, choosing the Hedera, Arkiv and ERC-8004 integrations, running and funding the testnet wallets, and testing every flow by hand, including paid requests from Claude Desktop.
 
 ## License
 

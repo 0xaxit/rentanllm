@@ -46,7 +46,7 @@ describe("list_models from Arkiv", () => {
         offer("0xb", "llama3.1:8b", true, 50_000n, 200_000n),
       ]),
       source: "arkiv",
-      writer: "0x9d89",
+      writer: "0x7A67",
     });
     expect(text).toContain("Read from the public Arkiv board");
     expect(text).toContain("https://rabdi.explorer.arkiv.network/entity/0xb");

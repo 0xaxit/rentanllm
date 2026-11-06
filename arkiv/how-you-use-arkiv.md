@@ -7,6 +7,8 @@
   - Each row shows its price, online state and network, and links to its entity on the Rabdi explorer.
   - Code: [`apps/web/lib/arkiv.ts`](../apps/web/lib/arkiv.ts), [`components/market/arkiv-board.tsx`](../apps/web/components/market/arkiv-board.tsx).
 - **Market page, "ON ARKIV · RECEIPTS":** the latest paid requests, newest first. Each row shows the amount paid and links to its entity.
+- **Claude Desktop, `list_models`:** the remote MCP server answers "what models can I buy?" from the Arkiv board, not from RentAnLLM's database. It groups offers by model, puts online and cheapest first, and tells the user the list came from Arkiv. It falls back to the gateway only if Arkiv doesn't answer within 5 seconds.
+  - Code: [`apps/api/src/mcp/arkiv-board.ts`](../apps/api/src/mcp/arkiv-board.ts), [`apps/api/src/mcp/arkiv-models.ts`](../apps/api/src/mcp/arkiv-models.ts).
 - **For agents and judges:** `bun packages/arkiv/scripts/query.ts [writer] [model]` reads the same data from the command line, with no account.
 
 ## Does each feature fit what the app does?
