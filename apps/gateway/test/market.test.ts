@@ -477,7 +477,7 @@ describe("market on Hedera testnet", () => {
     ).toBe(false);
   });
 
-  it("still hands over the receipt when the seller fails after payment", async () => {
+  it("charges nothing when the seller fails before answering", async () => {
     const request = { max_tokens: 50, messages: MESSAGES, model: BROKEN_MODEL };
     const [terms] = termsOf(await chat(gw, request));
     if (terms === undefined) {
@@ -487,14 +487,16 @@ describe("market on Hedera testnet", () => {
       "payment-signature": payFor(terms, "nonce-broken"),
     });
     expect(response.status).toBe(502);
-    expect(response.headers.get("payment-response")).not.toBeNull();
-    expect(response.headers.get("x-rentanllm-paid-usdc")).not.toBeNull();
-    await waitUntil(() =>
-      gw.state.paid.some((p) => p.paymentTx === fakeTxHash("nonce-broken"))
-    );
+    expect(response.headers.get("payment-response")).toBeNull();
+    expect(response.headers.get("x-rentanllm-paid-usdc")).toBeNull();
+    expect(await response.text()).toContain("Nothing was charged");
+    // Give a stray recording time to land, then check none did.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 200);
+    });
     expect(
-      gw.state.paid.find((p) => p.paymentTx === fakeTxHash("nonce-broken"))
-    ).toMatchObject({ httpStatus: 502, status: "error", usedMicros: 0n });
+      gw.state.paid.some((p) => p.paymentTx === fakeTxHash("nonce-broken"))
+    ).toBe(false);
   });
 
   it("rejects a max_tokens above the market ceiling before quoting", async () => {

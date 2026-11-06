@@ -99,6 +99,14 @@ export interface ProxyCall {
   readonly nodeId: string;
   readonly path: string;
   readonly provider: Provider;
+  /**
+   * Runs once the node has answered with a status, before any of the body is sent. Its
+   * headers join the response; failing it fails the request and cancels it on the node.
+   * The market settles the buyer's payment here, so a node that fails first costs nothing.
+   */
+  readonly onHead?: (
+    status: number
+  ) => Effect.Effect<Readonly<Record<string, string>>, UpstreamFailed>;
   readonly record: (finished: Finished) => Effect.Effect<void>;
   readonly requestId: string;
   /** Extra headers on the response (payment receipts, ids). */
@@ -231,6 +239,17 @@ export const proxyToNode = (call: ProxyCall) =>
     }
 
     flight.httpStatus = first.status;
+    const headHeaders =
+      call.onHead === undefined
+        ? {}
+        : yield* call.onHead(first.status).pipe(
+            Effect.tapError((error) =>
+              Effect.sync(() => {
+                flight.outcome = "error";
+                flight.httpStatus = error.status;
+              })
+            )
+          );
     const isSse = (first.headers["content-type"] ?? "").includes(
       "text/event-stream"
     );
@@ -277,6 +296,7 @@ export const proxyToNode = (call: ProxyCall) =>
       headers: {
         ...renterResponseHeaders(first.headers),
         ...call.responseHeaders,
+        ...headHeaders,
         "cache-control": "no-cache",
         "x-rentanllm-request-id": call.requestId,
       },

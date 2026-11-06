@@ -55,12 +55,16 @@ export type BeforeSettle<E> = (
   payer: string | null
 ) => Effect.Effect<void, PaymentRejected | E>;
 
-export const settleAgainst = <E = never>(
+/**
+ * Checks a payment without moving money: it pays exactly `requirements`, the facilitator
+ * says it is valid, and `beforeSettle` accepts the payer. Returns the payer it reported.
+ */
+export const verifyAgainst = <E = never>(
   payload: PaymentPayload,
   requirements: PaymentRequirements,
   beforeSettle?: BeforeSettle<E>
 ) =>
-  Effect.gen(function* settlePayment() {
+  Effect.gen(function* verifyPayment() {
     const facilitator = yield* X402Facilitator;
     const wrong = mismatch(payload, requirements);
     if (wrong !== null) {
@@ -72,16 +76,28 @@ export const settleAgainst = <E = never>(
         reason: verified.invalidMessage ?? verified.invalidReason ?? "invalid",
       });
     }
+    const payer = verified.payer ?? null;
     if (beforeSettle !== undefined) {
-      yield* beforeSettle(verified.payer ?? null);
+      yield* beforeSettle(payer);
     }
+    return { payer };
+  }).pipe(Effect.withSpan("x402.verify"));
+
+/** Settles a payment `verifyAgainst` already accepted: this is when the money moves. */
+export const settleVerified = (
+  payload: PaymentPayload,
+  requirements: PaymentRequirements,
+  verifiedPayer: string | null
+) =>
+  Effect.gen(function* settleVerifiedPayment() {
+    const facilitator = yield* X402Facilitator;
     const settled = yield* facilitator.settle(payload, requirements);
     if (!settled.success || settled.transaction.length === 0) {
       return yield* new PaymentRejected({
         reason: `settlement failed: ${settled.errorMessage ?? settled.errorReason ?? "unknown"}`,
       });
     }
-    const payer = settled.payer ?? verified.payer ?? null;
+    const payer = settled.payer ?? verifiedPayer;
     yield* Effect.logInfo("x402 payment settled").pipe(
       Effect.annotateLogs({
         network: settled.network,
@@ -98,3 +114,15 @@ export const settleAgainst = <E = never>(
       ),
     } satisfies Settlement;
   }).pipe(Effect.withSpan("x402.settle"));
+
+/** Verify, then settle at once: for payments that buy nothing that can fail afterwards. */
+export const settleAgainst = <E = never>(
+  payload: PaymentPayload,
+  requirements: PaymentRequirements,
+  beforeSettle?: BeforeSettle<E>
+) =>
+  verifyAgainst(payload, requirements, beforeSettle).pipe(
+    Effect.flatMap(({ payer }) =>
+      settleVerified(payload, requirements, payer)
+    )
+  );

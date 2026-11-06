@@ -33,6 +33,7 @@ import {
   PaymentDue,
   RateLimited,
   toErrorResponse,
+  UpstreamFailed,
 } from "../errors.ts";
 import { extractPaymentHeader, forwardableRequestHeaders } from "../headers.ts";
 import { proxyToNode } from "../proxy.ts";
@@ -40,9 +41,14 @@ import type { Finished } from "../proxy.ts";
 import { MarketStore } from "../services/market-store.ts";
 import { RateLimiter } from "../services/rate-limiter.ts";
 import { TunnelHub } from "../tunnel/tunnel-hub.ts";
+import { X402Facilitator } from "../x402/facilitator.ts";
 import { PaymentRejected } from "../x402/payment-rejected.ts";
 import { mismatch, X402_VERSION } from "../x402/requirements.ts";
-import { decodePaymentHeader, settleAgainst } from "../x402/settle.ts";
+import {
+  decodePaymentHeader,
+  settleVerified,
+  verifyAgainst,
+} from "../x402/settle.ts";
 import type { Settlement } from "../x402/settle.ts";
 import {
   costOf,
@@ -122,6 +128,8 @@ interface Quote {
 
 /** Buyers' budgets and per-seller limits cover this rolling window. */
 const BUYER_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** Node answers at or above this are errors: the buyer's payment is not taken. */
+const HTTP_ERROR = 400;
 const serves = (body: PricedRequest) => (offer: MarketOffer) =>
   offer.kind === body.kind && ALLOWED_PATHS[offer.provider].includes(body.path);
 
@@ -365,7 +373,9 @@ const handleMarket = <E, R>(
           return yield* new PaymentRejected({ reason: refusal });
         }
       });
-    const settled = yield* settleAgainst(
+    // Check the payment now, but only take it once the seller has answered: a seller
+    // that fails or errors before sending anything costs the buyer nothing.
+    const verified = yield* verifyAgainst(
       payload,
       quote.requirements,
       checkBuyer
@@ -378,13 +388,78 @@ const handleMarket = <E, R>(
     yield* Effect.annotateCurrentSpan({
       listingId: offer.listingId,
       requestId,
-      tx: settled.transaction,
     });
 
-    const receipt = {
-      "payment-response": encodePaymentResponseHeader(settled.settle),
-      "x-rentanllm-listing": offer.listingId,
+    const facilitator = yield* X402Facilitator;
+    let settled: Settlement | null = null;
+    const receiptFor = (settlement: Settlement) => ({
+      "payment-response": encodePaymentResponseHeader(settlement.settle),
       "x-rentanllm-paid-usdc": formatUsdc(quote.amountMicros),
+    });
+    const settleOnSuccess = (status: number) =>
+      status >= HTTP_ERROR
+        ? Effect.succeed({})
+        : settleVerified(payload, quote.requirements, verified.payer).pipe(
+            Effect.provideService(X402Facilitator, facilitator),
+            Effect.tap((settlement) =>
+              Effect.sync(() => {
+                settled = settlement;
+              }).pipe(
+                Effect.andThen(
+                  Effect.annotateCurrentSpan({ tx: settlement.transaction })
+                )
+              )
+            ),
+            Effect.map(receiptFor),
+            Effect.catchTag("PaymentRejected", (rejected) =>
+              Effect.fail(
+                new UpstreamFailed({
+                  errorType: "payment_error",
+                  message: `Payment not accepted: ${rejected.reason}. Nothing was charged.`,
+                  status: 402,
+                })
+              )
+            ),
+            Effect.catchTag("FacilitatorError", (cause) =>
+              Effect.fail(
+                new UpstreamFailed({
+                  errorType: "payment_error",
+                  message: `The payment could not be settled (${cause.message}). Nothing was charged.`,
+                  status: 502,
+                })
+              )
+            )
+          );
+    const recordIfPaid = (
+      mirror: ArkivMirror["Service"],
+      audit: SpendAudit["Service"]
+    ) =>
+      Effect.fn("recordIfPaid")(function* recordIfPaidGen(finished: Finished) {
+        if (settled === null) {
+          yield* Effect.logInfo(
+            "seller failed before answering; not charged"
+          ).pipe(
+            Effect.annotateLogs({
+              httpStatus: finished.httpStatus,
+              requestId,
+              status: finished.status,
+            })
+          );
+          return;
+        }
+        yield* recordPaid(
+          store,
+          mirror,
+          audit,
+          quote,
+          body,
+          settled,
+          requestId
+        )(finished);
+      });
+
+    const ids = {
+      "x-rentanllm-listing": offer.listingId,
       "x-rentanllm-request-id": requestId,
     };
     return yield* proxyToNode({
@@ -392,26 +467,34 @@ const handleMarket = <E, R>(
       bookingId: offer.listingId,
       headers: forwardableRequestHeaders(request.headers),
       nodeId: offer.nodeId,
+      onHead: settleOnSuccess,
       path: body.path,
       provider: offer.provider,
-      record: recordPaid(
-        store,
-        yield* ArkivMirror,
-        yield* SpendAudit,
-        quote,
-        body,
-        settled,
-        requestId
-      ),
+      record: recordIfPaid(yield* ArkivMirror, yield* SpendAudit),
       requestId,
-      responseHeaders: receipt,
+      responseHeaders: ids,
       stream: body.stream,
     }).pipe(
-      // The payment has settled: a node failure still carries its receipt, so the buyer
-      // knows it paid and can count it.
+      // A failure after the payment settled still carries its receipt, so the buyer knows
+      // it paid; one before it says nothing was charged.
       Effect.catchTag("UpstreamFailed", (failure) =>
         Effect.succeed(
-          HttpServerResponse.setHeaders(toErrorResponse(failure), receipt)
+          settled === null
+            ? HttpServerResponse.setHeaders(
+                toErrorResponse(
+                  failure.errorType === "payment_error"
+                    ? failure
+                    : new UpstreamFailed({
+                        ...failure,
+                        message: `${failure.message} Nothing was charged.`,
+                      })
+                ),
+                ids
+              )
+            : HttpServerResponse.setHeaders(toErrorResponse(failure), {
+                ...ids,
+                ...receiptFor(settled),
+              })
         )
       )
     );
