@@ -151,12 +151,18 @@ services:
     command:
       - |
         if [ -z "$$API_CRON_ORIGIN" ]; then echo "API_CRON_ORIGIN unset, idling"; exec sleep infinity; fi
+        call() {
+          code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time "$$2" \
+            -H "Authorization: Bearer $$CRON_SECRET" "$$API_CRON_ORIGIN$$1")
+          echo "$$(date -u +%FT%TZ) $$1 $$code"
+        }
+        n=0
         while true; do
-          for path in /cron/tick; do
-            code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 55 \
-              -H "Authorization: Bearer $$CRON_SECRET" "$$API_CRON_ORIGIN$$path")
-            echo "$$(date -u +%FT%TZ) $$path $$code"
-          done
+          call /cron/tick 55
+          # ERC-8004 reputation: the API posts at most every 6 hours per agent; it is
+          # asked every 15 minutes and may take a few on-chain transactions to answer.
+          if [ $$((n % 15)) -eq 0 ]; then call /cron/reputation 280; fi
+          n=$$((n + 1))
           sleep 60
         done
     environment:

@@ -92,6 +92,20 @@ To read one buyer's spending straight from a mirror node (no account or key need
 bun scripts/hcs-audit.ts 0.0.11331175
 ```
 
+### Seller identity and reputation (ERC-8004, HCS-14)
+
+Each seller node can be registered as an agent on the [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) registries deployed on Hedera testnet (chain 296). Buyers then get a public record of a seller that the seller cannot write themselves.
+
+- **Identity:** the seller registers from their own wallet with the console's REGISTER AS AGENT button. That button calls `register(agentURI)` on the Identity Registry [`0x8004A818…BD9e`](https://hashscan.io/testnet/contract/0x8004A818BFB912233c491871b3d84c89A494BD9e). The agentURI is the node's registration file, served by the API at `/agents/<nodeId>/registration.json`. The file holds the x402 endpoint, what the node sells, and the node's [HCS-14](https://hol.org/docs/standards/hcs-14/) Universal Agent ID. The seller's wallet pays the fee in HBAR.
+- **Reputation:** the platform measures each node over 24 hours: uptime from its tunnel sessions, the median time to first byte and the success rate from its paid requests. A monitor wallet ([`0.0.11332812`](https://hashscan.io/testnet/account/0.0.11332812)) posts these with `giveFeedback` to the Reputation Registry [`0x8004B663…8713`](https://hashscan.io/testnet/contract/0x8004B663056A597Dffe9eCcC1965A193B7388713) every 6 hours, with tags `uptime`, `ttfbMs` and `successRate`. ERC-8004 does not let an agent's owner rate itself, so a seller cannot inflate its own score.
+- **Where it shows:** the homepage table has UPTIME 24H and TTFB columns, and a ✓ AGENT #n badge that links to the registration file.
+
+The demo seller is agent **#146**. To read its identity and reputation from the chain (no account or key needed):
+
+```sh
+bun apps/api/scripts/agent-reputation.ts 146
+```
+
 ## Arkiv
 
 The gateway writes the live offers and one receipt per paid request to Arkiv's Rabdi testnet. The market page reads them back from Arkiv. See [`arkiv/`](arkiv/) for the schema and how each part is used.
