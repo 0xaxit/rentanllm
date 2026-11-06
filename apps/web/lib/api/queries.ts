@@ -7,12 +7,14 @@ import { Effect } from "effect";
 import type { ApiResult } from "./errors";
 import { publicApi, serverApi } from "./server";
 import type {
+  AgentWallet,
   BuyerOverview,
   Listing,
   MarketOffer,
   ModelRef,
   NodeIdentity,
   NodeUptime,
+  OAuthGrant,
   OwnerDashboard,
   OwnerSales,
   PaidRequest,
@@ -24,6 +26,17 @@ import type {
 /** The signed-in buyer's paying account, limits and last 24 hours of spend. */
 export const getBuyerOverview = async (): Promise<ApiResult<BuyerOverview>> =>
   await serverApi((api) => api.buyer.overview());
+
+/** The signed-in buyer's agent wallet (null before it exists). */
+export const getAgentWallet = async (): Promise<
+  ApiResult<AgentWallet | null>
+> => await serverApi((api) => api.buyer.agentWallet());
+
+/** A pending connector authorization, for the consent page. */
+export const getOAuthGrant = async (
+  grantId: string
+): Promise<ApiResult<OAuthGrant>> =>
+  await serverApi((api) => api.oauth.grant({ params: { grantId } }));
 
 export const getMe = async (): Promise<ApiResult<User>> =>
   await serverApi((api) => api.auth.me());

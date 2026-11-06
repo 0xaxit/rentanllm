@@ -5,6 +5,7 @@
 import { callApi } from "./client";
 import type { ApiResult } from "./errors";
 import type {
+  AgentWallet,
   ApiNode,
   BuyerPolicy,
   Listing,
@@ -137,3 +138,18 @@ export const linkNodeIdentity = async (
   await callApi((api) =>
     api.owner.linkNodeIdentity({ params: { nodeId }, payload: { agentId } })
   );
+
+/** Creates the buyer's agent wallet, or returns the one they have. */
+export const createAgentWallet = async (): Promise<ApiResult<AgentWallet>> =>
+  await callApi((api) => api.buyer.createAgentWallet());
+
+/** Approves a connector; the browser then follows `redirectUrl` back to the client. */
+export const approveConnection = async (
+  grantId: string
+): Promise<ApiResult<{ readonly redirectUrl: string }>> =>
+  await callApi((api) => api.oauth.approve({ params: { grantId } }));
+
+export const denyConnection = async (
+  grantId: string
+): Promise<ApiResult<{ readonly redirectUrl: string }>> =>
+  await callApi((api) => api.oauth.deny({ params: { grantId } }));

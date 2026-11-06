@@ -4,23 +4,32 @@ import { ApiErrorState } from "@/components/api-error";
 import { GroupedList, GroupedRow } from "@/components/app-shell/grouped-list";
 import { AppMain, PageHeader } from "@/components/app-shell/page-header";
 import { CopyButton } from "@/components/copy-button";
+import { AgentWalletCard } from "@/components/market/agent-wallet-card";
 import { ArkivBoard } from "@/components/market/arkiv-board";
 import { PaymentRow } from "@/components/market/payment-row";
+import { UseTabs } from "@/components/market/use-tabs";
+import type { UseMode } from "@/components/market/use-tabs";
 import {
   BlockHeading,
   Callout,
   LiveCursor,
   Note,
 } from "@/components/primitives";
-import { getMarketOffers, getPaidRequests } from "@/lib/api/queries";
+import { SignInButton } from "@/components/wallet/sign-in-button";
+import {
+  getAgentWallet,
+  getMarketOffers,
+  getPaidRequests,
+} from "@/lib/api/queries";
+import type { AgentWallet } from "@/lib/api/types";
 import { getArkivBoard } from "@/lib/arkiv";
-import { GATEWAY_API_BASE } from "@/lib/env";
+import { GATEWAY_API_BASE, GATEWAY_URL, MCP_URL } from "@/lib/env";
 import { marketModels } from "@/lib/market";
 import { formatPrice } from "@/lib/money";
 
 export const metadata: Metadata = {
   description:
-    "Open models on people's own machines, bought one request at a time by AI agents, paid in USDC straight to the seller.",
+    "Open models on people's own machines, bought one request at a time by AI agents, paid in USDC straight to the seller. Connect Claude Desktop, or call the OpenAI-compatible API.",
   title: "Market",
 };
 
@@ -36,12 +45,191 @@ const callSnippet = (model: string) =>
     "# -> 402 with the price; pay it with any x402 client and send it again",
   ].join("\n");
 
-const MarketPage = async () => {
-  const [offers, payments, arkiv] = await Promise.all([
+const TOOLS = [
+  {
+    detail: "models for sale, sellers online, prices",
+    label: "list_models",
+    value: "read",
+  },
+  {
+    detail: "what one request costs and who gets paid",
+    label: "quote_inference",
+    value: "read",
+  },
+  {
+    detail: "pays the seller from your agent wallet, returns the answer",
+    label: "buy_inference",
+    value: "pays",
+  },
+  {
+    detail: "balance and latest payments with links",
+    label: "agent_wallet",
+    value: "read",
+  },
+] as const;
+
+const localMcpConfig = () =>
+  JSON.stringify(
+    {
+      mcpServers: {
+        rentanllm: {
+          args: ["/path/to/rentanllm/apps/mcp/src/main.ts"],
+          command: "bun",
+          env: {
+            RENTANLLM_GATEWAY_URL: GATEWAY_URL,
+            RENTANLLM_MCP_ACCOUNT: "0.0.12345",
+            RENTANLLM_MCP_MAX_PER_DAY_USDC: "1",
+            RENTANLLM_MCP_MAX_PER_REQUEST_USDC: "0.05",
+            RENTANLLM_MCP_NETWORK: "hedera:testnet",
+          },
+        },
+      },
+    },
+    null,
+    2
+  );
+
+const initialMode = (raw: string | string[] | undefined): UseMode =>
+  raw === "api" ? "api" : "mcp";
+
+/** "signed-out", or the buyer's agent wallet (null before it exists). */
+type WalletState = AgentWallet | null | "signed-out";
+
+const McpPanel = ({ wallet }: { wallet: WalletState }) => (
+  <div className="flex flex-col gap-5">
+    <Callout rule="amber">
+      <p className="text-body text-enamel leading-5.75">
+        Add RentAnLLM to Claude Desktop as a connector. Claude finds a model,
+        tells you the price and, when you confirm, pays the seller from your
+        agent wallet. Your wallet sign-in here is the login: no key leaves your
+        wallet, and no API key to copy.
+      </p>
+    </Callout>
+    <GroupedList title="1 · SIGN IN AND FUND YOUR AGENT WALLET">
+      {wallet === "signed-out" ? (
+        <li className="flex flex-col items-start gap-3 p-4">
+          <p className="text-body text-cement">
+            Sign in with your wallet. The connector uses the same sign-in.
+          </p>
+          <SignInButton variant="light" />
+        </li>
+      ) : (
+        <li className="p-4">
+          <AgentWalletCard wallet={wallet} />
+        </li>
+      )}
+    </GroupedList>
+    <Callout rule="mud">
+      <div className="flex flex-col gap-3">
+        <p className="text-label tracking-label text-mud">
+          2 · ADD THE CONNECTOR IN CLAUDE DESKTOP
+        </p>
+        <p className="text-body text-cement leading-5.75">
+          Settings → Connectors → Add custom connector. Name it RentAnLLM and
+          paste this URL:
+        </p>
+        <pre className="text-enamel overflow-x-auto bg-black p-3 text-sm leading-5">
+          {MCP_URL}
+        </pre>
+        <CopyButton
+          label="COPY URL"
+          text={MCP_URL}
+          toast="Connector URL copied"
+          className="self-start"
+          variant="chip"
+        />
+        <p className="text-body text-cement leading-5.75">
+          Press Connect. Claude opens RentAnLLM in your browser; you are already
+          signed in, so approve once and you are back in Claude.
+        </p>
+      </div>
+    </Callout>
+    <GroupedList
+      footer="Claude asks before every buy_inference · your Budget limits are checked before each payment settles"
+      title="3 · ASK CLAUDE"
+    >
+      {TOOLS.map((tool) => (
+        <GroupedRow
+          detail={tool.detail}
+          key={tool.label}
+          label={tool.label}
+          tone={tool.value === "pays" ? "amber" : "plain"}
+          value={tool.value}
+        />
+      ))}
+    </GroupedList>
+    <Note>
+      try: &quot;use RentAnLLM to ask llama3.1:8b for a haiku about Hedera&quot;
+    </Note>
+  </div>
+);
+
+const ApiPanel = ({ example }: { example: string }) => (
+  <div className="flex flex-col gap-5">
+    <Callout rule="amber">
+      <div className="flex flex-col gap-3">
+        <p className="text-body text-enamel leading-5.75">
+          Call it like any OpenAI-compatible API. The first answer is a 402 with
+          the price: your prompt plus the full max_tokens, at the cheapest
+          online seller&apos;s rates. Pay it with x402 and the gateway streams
+          the answer.
+        </p>
+        <pre className="text-cement overflow-x-auto bg-black p-3 text-sm leading-5">
+          {callSnippet(example)}
+        </pre>
+        <CopyButton
+          label="COPY"
+          text={callSnippet(example)}
+          toast="Command copied"
+          className="self-start"
+          variant="chip"
+        />
+      </div>
+    </Callout>
+    <Callout rule="mud">
+      <div className="flex flex-col gap-3">
+        <p className="text-label tracking-label text-mud">
+          OR RUN THE MCP SERVER ON YOUR MACHINE
+        </p>
+        <p className="text-body text-cement leading-5.75">
+          For Claude Code, Cursor or any local MCP client. It pays from your own
+          Hedera account, and the key stays in your macOS keychain behind Touch
+          ID.
+        </p>
+        <pre className="text-cement overflow-x-auto bg-black p-3 text-sm leading-5">
+          {localMcpConfig()}
+        </pre>
+        <CopyButton
+          label="COPY CONFIG"
+          text={localMcpConfig()}
+          toast="Config copied"
+          className="self-start"
+          variant="chip"
+        />
+        <Note>
+          store the key once with bun src/main.ts store-key · see
+          apps/mcp/README.md
+        </Note>
+      </div>
+    </Callout>
+  </div>
+);
+
+const MarketPage = async ({
+  searchParams,
+}: {
+  searchParams: Promise<{ use?: string | string[] }>;
+}) => {
+  const [{ use }, offers, payments, arkiv, walletResult] = await Promise.all([
+    searchParams,
     getMarketOffers(),
     getPaidRequests(),
     getArkivBoard(),
+    getAgentWallet(),
   ]);
+  const wallet: WalletState = walletResult.ok
+    ? walletResult.data
+    : "signed-out";
   const models = offers.ok ? marketModels(offers.data) : [];
   const example = models.find((row) => row.online > 0)?.model ?? "llama3.1:8b";
   return (
@@ -84,25 +272,11 @@ const MarketPage = async () => {
           signedOut={{ body: "", title: "Sign in" }}
         />
       )}
-      <Callout rule="amber">
-        <div className="flex flex-col gap-3">
-          <p className="text-body text-enamel leading-5.75">
-            Call it like any OpenAI-compatible API. The first answer is a 402
-            with the price: your prompt plus the full max_tokens, at the
-            cheapest online seller&apos;s rates. Pay it with x402 and the
-            gateway streams the answer.
-          </p>
-          <pre className="text-cement overflow-x-auto bg-black p-3 text-sm leading-5">
-            {callSnippet(example)}
-          </pre>
-          <CopyButton
-            label="COPY"
-            text={callSnippet(example)}
-            toast="Command copied"
-            variant="outline"
-          />
-        </div>
-      </Callout>
+      <UseTabs
+        api={<ApiPanel example={example} />}
+        initial={initialMode(use)}
+        mcp={<McpPanel wallet={wallet} />}
+      />
       {payments.ok && (
         <GroupedList
           footer="every payment settled on chain before its request ran"

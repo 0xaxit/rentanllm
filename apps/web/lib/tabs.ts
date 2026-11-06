@@ -28,7 +28,6 @@ export const OWNER_TABS: readonly Tab[] = [
 ];
 
 export const MARKET_TABS: readonly Tab[] = [
-  { href: "/market", icon: "browse", label: "Market" },
-  { href: "/agents", icon: "keys", label: "Agents" },
+  { href: "/market", icon: "browse", label: "Market", matches: ["/connect"] },
   { href: "/budget", icon: "wallet", label: "Budget" },
 ];

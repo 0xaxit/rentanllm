@@ -8,6 +8,8 @@ import type {
   BuyerPolicySchema,
   ListingSchema,
   MarketOfferSchema,
+  AgentWalletSchema,
+  OAuthGrantSchema,
   NodeIdentitySchema,
   ModelRefSchema,
   NodeSchema,
@@ -43,3 +45,5 @@ export type OwnerSales = typeof OwnerSalesSchema.Type;
 export type SalesTotals = OwnerSales["lifetime"];
 export type BuyerOverview = typeof BuyerOverviewSchema.Type;
 export type BuyerPolicy = typeof BuyerPolicySchema.Type;
+export type AgentWallet = typeof AgentWalletSchema.Type;
+export type OAuthGrant = typeof OAuthGrantSchema.Type;

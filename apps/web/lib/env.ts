@@ -57,3 +57,12 @@ export const SITE_URL = trimSlash(
 /** The HCS topic the gateway posts one message to per settled payment. */
 export const HCS_AUDIT_TOPIC_ID =
   process.env.NEXT_PUBLIC_HCS_AUDIT_TOPIC_ID?.trim() || "0.0.11332573";
+
+/** The hosted MCP server Claude Desktop connects to (a custom connector URL). */
+export const MCP_URL = trimSlash(
+  process.env.NEXT_PUBLIC_MCP_URL?.trim() ||
+    "https://rentanllm-api.vercel.app/mcp"
+);
+
+/** Circle's testnet USDC (HTS 0.0.429274) through its ERC-20 facade on Hedera's EVM. */
+export const USDC_EVM_ADDRESS = "0x0000000000000000000000000000000000068cda";
