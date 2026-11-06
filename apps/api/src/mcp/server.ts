@@ -95,6 +95,68 @@ const explain = (error: unknown) =>
 
 const WEBSITE = "https://rentanllm.vercel.app";
 
+const hashscanTx = (tx: string) =>
+  `https://hashscan.io/testnet/transaction/${encodeURIComponent(tx)}`;
+
+/** buy_inference's structured result: what was sent, what came back, what was paid. */
+const purchaseShape = {
+  answer: z.string().describe("The model's answer, verbatim"),
+  max_tokens: z.number().int(),
+  model: z.string(),
+  payment: z.object({
+    amount_usdc: z.string(),
+    from: z.string().describe("The agent wallet that paid"),
+    network: z.string(),
+    to: z.string().describe("The seller's Hedera account"),
+    transaction: z.string().nullable(),
+    url: z.string().nullable().describe("The payment on HashScan"),
+  }),
+  prompt: z
+    .array(z.object({ content: z.string(), role: z.string() }))
+    .describe("The exact messages sent to the model"),
+  seller_error: z
+    .string()
+    .nullable()
+    .describe("Set when the payment settled but the seller failed to answer"),
+  tokens: z.object({
+    input: z.number().int().nullable(),
+    output: z.number().int().nullable(),
+  }),
+  truncated: z.boolean().describe("True when the answer stopped at max_tokens"),
+};
+
+export type Purchase = z.infer<z.ZodObject<typeof purchaseShape>>;
+
+/** The same result as text, in labelled sections, for clients that read only text. */
+export const purchaseText = (p: Purchase): string => {
+  const lines = [`MODEL\n${p.model}`, ""];
+  for (const message of p.prompt) {
+    lines.push(`PROMPT (${message.role})`, message.content, "");
+  }
+  if (p.seller_error === null) {
+    lines.push(
+      p.truncated
+        ? `ANSWER (verbatim, cut off at max_tokens ${p.max_tokens})`
+        : "ANSWER (verbatim)",
+      p.answer,
+      ""
+    );
+  } else {
+    lines.push(
+      "ANSWER",
+      `none: the seller failed to answer (${p.seller_error})`,
+      ""
+    );
+  }
+  lines.push(
+    "PAYMENT",
+    `${p.payment.amount_usdc} USDC from ${p.payment.from} to ${p.payment.to} on ${p.payment.network}`,
+    p.payment.url ?? "no transaction id returned",
+    `tokens: ${p.tokens.input ?? "?"} in, ${p.tokens.output ?? "?"} out`
+  );
+  return lines.join("\n");
+};
+
 export const buildMcpServer = (ctx: McpContext): McpServer => {
   const icons = [
     { mimeType: "image/png", sizes: [...ctx.icon.sizes], src: ctx.icon.src },
@@ -109,7 +171,7 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
     },
     {
       instructions:
-        "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models, then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. agent_wallet shows the balance and recent payments.",
+        "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models, then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. agent_wallet shows the balance and recent payments. When you show a buy_inference result, show the exact prompt that was sent and the model's answer verbatim (in a quote or code block), then one payment line with the HashScan link. Do not summarize, grade or comment on the answer unless the user asks.",
     }
   );
 
@@ -176,7 +238,7 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
         readOnlyHint: false,
       },
       description:
-        "Pays the cheapest online seller from the user's agent wallet (USDC on Hedera testnet) and returns the model's answer with the on-chain receipt.",
+        "Pays the cheapest online seller from the user's agent wallet (USDC on Hedera testnet) and returns the exact prompt sent, the model's verbatim answer and the on-chain receipt. Show the user the prompt and the answer as returned, without commentary unless asked.",
       inputSchema: {
         ...requestShape,
         max_price_usdc: z
@@ -184,6 +246,7 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
           .optional()
           .describe('Refuse if the price is above this, e.g. "0.01"'),
       },
+      outputSchema: purchaseShape,
       title: "Buy inference",
     },
     async (input) => {
@@ -218,29 +281,33 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
           quote
         );
         const answer = await payAndCall(ctx.gatewayUrl, request, payment);
-        const receipt = [
-          `paid ${formatUsdc(price)} USDC from ${signer.accountId} to ${quote.terms.payTo}`,
-          txLine(NETWORK, answer.tx),
-        ];
-        if (answer.error !== null) {
-          return failure(
-            [
-              `Paid, but the seller failed to answer: ${answer.error}`,
-              "",
-              "---",
-              ...receipt,
-            ].join("\n")
-          );
-        }
-        return text(
-          [
-            answer.content,
-            "",
-            "---",
-            ...receipt,
-            `tokens: ${answer.inputTokens ?? "?"} in, ${answer.outputTokens ?? "?"} out`,
-          ].join("\n")
-        );
+        const result = {
+          answer: answer.content,
+          max_tokens: request.maxTokens,
+          model: request.model,
+          payment: {
+            amount_usdc: formatUsdc(price),
+            from: signer.accountId,
+            network: NETWORK,
+            to: quote.terms.payTo,
+            transaction: answer.tx,
+            url: answer.tx === null ? null : hashscanTx(answer.tx),
+          },
+          prompt: request.messages.map((m) => ({
+            content: m.content,
+            role: m.role,
+          })),
+          seller_error: answer.error,
+          tokens: { input: answer.inputTokens, output: answer.outputTokens },
+          truncated:
+            answer.outputTokens !== null &&
+            answer.outputTokens >= request.maxTokens,
+        };
+        return {
+          content: [{ text: purchaseText(result), type: "text" as const }],
+          isError: answer.error !== null,
+          structuredContent: result,
+        };
       } catch (error) {
         return failure(`Not paid: ${explain(error)}`);
       }
