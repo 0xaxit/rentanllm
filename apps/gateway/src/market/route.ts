@@ -58,6 +58,7 @@ import {
   withEnforcedCap,
 } from "./quote.ts";
 import type { ChatBody } from "./quote.ts";
+import { SpendAudit } from "./spend-audit.ts";
 import { MarketTerms } from "./terms.ts";
 
 export const CHAT_COMPLETIONS_PATH = "/v1/chat/completions";
@@ -159,6 +160,7 @@ const matchQuote = (
 const recordPaid = (
   store: MarketStore["Service"],
   mirror: ArkivMirror["Service"],
+  audit: SpendAudit["Service"],
   quote: Quote,
   body: ChatBody,
   settled: Settlement,
@@ -209,6 +211,19 @@ const recordPaid = (
           paymentTx: settled.transaction,
           requestId,
           status: finished.status,
+        });
+        yield* audit.record({
+          amount: quote.amountMicros,
+          asset: requirements.asset,
+          at: finished.finishedAt,
+          maxTokens: body.maxTokens,
+          model: finished.usage?.model ?? body.model,
+          network: requirements.network,
+          payTo: requirements.payTo,
+          payer: settled.payer,
+          requestId,
+          status: finished.status,
+          tx: settled.transaction,
         });
       }
       yield* Effect.logInfo("paid request finished").pipe(
@@ -328,6 +343,7 @@ export const handleChatCompletions = Effect.gen(function* handleChat() {
     record: recordPaid(
       store,
       yield* ArkivMirror,
+      yield* SpendAudit,
       quote,
       body,
       settled,

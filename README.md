@@ -81,6 +81,17 @@ One run of the command above, on 6 Nov 2026:
 - **Fee:** paid in HBAR by the facilitator `0.0.9185802`
 - **Answer:** 19 prompt tokens and 40 answer tokens from `llama3.1:8b`, served from the seller's own machine
 
+### Spending limits and the audit log
+
+- **Limits:** a buyer signs in on `/budget` with the wallet behind their paying Hedera account. There they set a 24-hour budget, a max per request, a 24-hour limit per seller, a seller allowlist, or a pause. The gateway checks these after the facilitator verifies a payment and **before it settles**. A payment over a limit gets a 402 with the reason, and no USDC moves, whatever client sent it.
+- **Audit log:** every settled payment is posted as one message to the Hedera Consensus Service topic [`0.0.11332573`](https://hashscan.io/testnet/topic/0.0.11332573). Only the platform's submit key can post to it. Hedera gives each message a consensus timestamp, a sequence number and a running hash that chains it to every earlier message, so the log cannot be edited or trimmed without it showing. Each payment on `/budget` links to its message.
+
+To read one buyer's spending straight from a mirror node (no account or key needed):
+
+```sh
+bun scripts/hcs-audit.ts 0.0.11331175
+```
+
 ## Arkiv
 
 The gateway writes the live offers and one receipt per paid request to Arkiv's Rabdi testnet. The market page reads them back from Arkiv. See [`arkiv/`](arkiv/) for the schema and how each part is used.

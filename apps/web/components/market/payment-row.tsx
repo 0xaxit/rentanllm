@@ -1,7 +1,13 @@
 import { GroupedRow } from "@/components/app-shell/grouped-list";
 import { LocalTime } from "@/components/local-time";
 import type { PaidRequest } from "@/lib/api/types";
-import { networkLabel, paymentTxUrl, shortTx } from "@/lib/explorer";
+import { HCS_AUDIT_TOPIC_ID } from "@/lib/env";
+import {
+  auditMessageUrl,
+  networkLabel,
+  paymentTxUrl,
+  shortTx,
+} from "@/lib/explorer";
 import { formatInteger, formatUsdExact } from "@/lib/money";
 
 /** One paid market request: model, output tokens, price and its on-chain payment. */
@@ -24,6 +30,22 @@ export const PaymentRow = ({ request }: { request: PaidRequest }) => {
             >
               {shortTx(request.paymentTx)}
             </a>
+          )}
+          {request.auditSequence === null ? null : (
+            <>
+              {" · "}
+              <a
+                className="text-amber underline"
+                href={auditMessageUrl(
+                  HCS_AUDIT_TOPIC_ID,
+                  request.auditSequence
+                )}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                log #{request.auditSequence}
+              </a>
+            </>
           )}
         </>
       }

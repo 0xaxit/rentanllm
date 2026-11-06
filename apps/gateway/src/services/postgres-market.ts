@@ -157,6 +157,11 @@ export const PostgresMarketStore = Layer.effect(MarketStore)(
         ),
       catalog: Cache.get(offers, ""),
       offers: (model) => Cache.get(offers, model),
+      recordAuditSequence: (requestId, sequence) =>
+        sql`
+          update paid_requests set audit_sequence = ${sequence}
+          where request_id = ${requestId}
+        `.pipe(Effect.asVoid, Effect.mapError(storeError)),
       recordPaid: (record) =>
         Effect.gen(function* recordPaidRequest() {
           const { prices, usage } = record;

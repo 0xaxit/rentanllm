@@ -21,6 +21,7 @@ import {
   CHAT_COMPLETIONS_PATH,
   handleChatCompletions,
 } from "./market/route.ts";
+import { SpendAuditLive } from "./market/spend-audit.ts";
 import { MarketTermsLive } from "./market/terms.ts";
 import { countRequest } from "./metrics.ts";
 import { clientAddress, lookupRegion } from "./region.ts";
@@ -204,7 +205,7 @@ export const gatewayLayer = <E>(options: GatewayOptions<E>) => {
   const market = MarketTermsLive.pipe(Layer.provide(MirrorNodeAccounts));
   const hubAndMarket = Layer.mergeAll(TunnelHubLive, market);
   const arkiv = ArkivMirrorLive.pipe(Layer.provide(hubAndMarket));
-  const core = Layer.mergeAll(hubAndMarket, arkiv).pipe(
+  const core = Layer.mergeAll(hubAndMarket, arkiv, SpendAuditLive).pipe(
     Layer.provideMerge(options.stores),
     Layer.provideMerge(options.facilitator),
     Layer.provideMerge(settings)

@@ -7,6 +7,8 @@ import { LimitsForm } from "@/components/buyer/limits-form";
 import { PaymentRow } from "@/components/market/payment-row";
 import { BlockHeading, Callout, Note } from "@/components/primitives";
 import { getBuyerOverview } from "@/lib/api/queries";
+import { HCS_AUDIT_TOPIC_ID } from "@/lib/env";
+import { auditTopicUrl } from "@/lib/explorer";
 import { formatUsdExact } from "@/lib/money";
 
 export const metadata: Metadata = {
@@ -64,6 +66,12 @@ const BudgetPage = async () => {
             href={`https://hashscan.io/testnet/account/${account}`}
             label={account}
             tone="amber"
+            value="HashScan →"
+          />
+          <GroupedRow
+            detail="every settled payment is posted to a Hedera Consensus Service topic"
+            href={auditTopicUrl(HCS_AUDIT_TOPIC_ID)}
+            label={`Spend audit log · ${HCS_AUDIT_TOPIC_ID}`}
             value="HashScan →"
           />
         </GroupedList>

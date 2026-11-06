@@ -34,6 +34,11 @@ export class MarketStore extends Context.Service<
     readonly offers: (
       model: string
     ) => Effect.Effect<readonly MarketOffer[], StoreError>;
+    /** Saves the spend audit log's sequence number for a paid request. */
+    readonly recordAuditSequence: (
+      requestId: string,
+      sequence: number
+    ) => Effect.Effect<void, StoreError>;
     readonly recordPaid: (
       record: PaidRequestRecord
     ) => Effect.Effect<boolean, StoreError>;

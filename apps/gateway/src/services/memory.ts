@@ -67,6 +67,8 @@ export type Seed = typeof SeedSchema.Type;
 
 /** All mutable state behind the in-memory stores. Exposed so tests can inspect it. */
 export interface MemoryState {
+  /** Spend audit log sequence numbers, keyed by request id. */
+  readonly auditSequences: Map<string, number>;
   /** Buyers' spending limits, keyed by paying Hedera account. */
   readonly buyerPolicies: Map<string, BuyerPolicy>;
   /** Requests in flight per slot key. */
@@ -104,6 +106,7 @@ export const makeMemoryState = (seed: Seed): MemoryState => {
     });
   }
   return {
+    auditSequences: new Map(),
     buyerPolicies: new Map(),
     inFlight: new Map(),
     meters: new Map(),
@@ -187,6 +190,10 @@ export const memoryStoresLayer = (state: MemoryState) =>
               a.prices.outputPerMtok < b.prices.outputPerMtok ? -1 : 1
             )
         ),
+      recordAuditSequence: (requestId, sequence) =>
+        Effect.sync(() => {
+          state.auditSequences.set(requestId, sequence);
+        }),
       recordPaid: (record) =>
         Effect.sync(() => {
           const duplicate = state.paid.some(

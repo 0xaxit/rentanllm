@@ -16,12 +16,25 @@ export interface ArkivSettings {
 }
 
 /**
+ * The spend audit log: one message per settled payment on a Hedera Consensus Service
+ * topic. The operator account holds the topic's submit key and pays the message fees.
+ * Null leaves the log out.
+ */
+export interface AuditSettings {
+  readonly operatorId: string;
+  /** The operator's ECDSA key (hex, or DER-encoded). */
+  readonly operatorKey: Redacted.Redacted<string>;
+  readonly topicId: string;
+}
+
+/**
  * Pay-per-request market terms (`POST /v1/chat/completions`). Null turns the route off.
  * Every request is quoted from its size and paid in full over x402 to the seller's
  * wallet before it is forwarded.
  */
 export interface MarketSettings {
   readonly arkiv: ArkivSettings | null;
+  readonly audit: AuditSettings | null;
   /** Chain buyers pay on: Hedera testnet. */
   readonly chain: PaymentChain;
   /** max_tokens quoted (and enforced) when a request does not set one. */
@@ -116,6 +129,42 @@ const arkivFromEnv = Effect.gen(function* readArkivSettings() {
   } satisfies ArkivSettings;
 });
 
+const HEDERA_ID = /^\d+\.\d+\.\d+$/u;
+
+/** A trimmed optional string setting; empty when unset. */
+const optionalString = (name: string) =>
+  Config.String(name).pipe(
+    Config.withDefault(""),
+    Config.map((value) => value.trim())
+  );
+
+/** HCS_AUDIT_TOPIC_ID + HEDERA_OPERATOR_ID + HEDERA_OPERATOR_KEY, all or none. */
+const auditFromEnv = Effect.gen(function* readAuditSettings() {
+  const topicId = yield* optionalString("HCS_AUDIT_TOPIC_ID");
+  const operatorId = yield* optionalString("HEDERA_OPERATOR_ID");
+  const operatorKey = yield* optionalString("HEDERA_OPERATOR_KEY");
+  const set = [topicId, operatorId, operatorKey].filter((v) => v !== "");
+  if (set.length === 0) {
+    return null;
+  }
+  if (
+    set.length < 3 ||
+    !HEDERA_ID.test(topicId) ||
+    !HEDERA_ID.test(operatorId)
+  ) {
+    return yield* Effect.die(
+      new Error(
+        "the spend audit log needs HCS_AUDIT_TOPIC_ID and HEDERA_OPERATOR_ID (0.0.x) and HEDERA_OPERATOR_KEY together"
+      )
+    );
+  }
+  return {
+    operatorId,
+    operatorKey: Redacted.make(operatorKey),
+    topicId,
+  } satisfies AuditSettings;
+});
+
 const marketFromEnv = Effect.gen(function* readMarketSettings() {
   const enabled = yield* Config.Boolean("MARKET_ENABLED").pipe(
     Config.withDefault(true)
@@ -128,6 +177,7 @@ const marketFromEnv = Effect.gen(function* readMarketSettings() {
   );
   return {
     arkiv: yield* arkivFromEnv,
+    audit: yield* auditFromEnv,
     chain: HEDERA_TESTNET,
     defaultMaxTokens: yield* intWithDefault(
       "MARKET_DEFAULT_MAX_TOKENS",

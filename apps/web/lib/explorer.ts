@@ -20,3 +20,11 @@ export const networkLabel = (network: string): string =>
 /** "0x1234…abcd" or "0.0.48…1234.5678" */
 export const shortTx = (tx: string): string =>
   tx.length <= 14 ? tx : `${tx.slice(0, 7)}…${tx.slice(-6)}`;
+
+/** The spend audit topic on HashScan. */
+export const auditTopicUrl = (topicId: string): string =>
+  `https://hashscan.io/testnet/topic/${topicId}`;
+
+/** One audit message as the mirror node serves it: JSON with its consensus time and running hash. */
+export const auditMessageUrl = (topicId: string, sequence: number): string =>
+  `https://testnet.mirrornode.hedera.com/api/v1/topics/${topicId}/messages/${sequence}`;

@@ -285,6 +285,8 @@ export type MarketOffer = typeof MarketOfferSchema.Type;
 
 /** One paid request on the market: public, like the on-chain payment it points to. */
 export const PaidRequestSchema = Schema.Struct({
+  /** This payment's message on the spend audit log (an HCS topic); null until posted. */
+  auditSequence: Schema.NullOr(Schema.Int),
   createdAt: Schema.Date,
   httpStatus: Schema.Int,
   inputTokens: Schema.Int,

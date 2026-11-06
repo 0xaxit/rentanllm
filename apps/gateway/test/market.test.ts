@@ -79,6 +79,7 @@ const SEED: Seed = {
 
 const market = (hederaMirrorUrl: string): MarketSettings => ({
   arkiv: null,
+  audit: null,
   chain: HEDERA_TESTNET,
   defaultMaxTokens: 256,
   hederaMirrorUrl,

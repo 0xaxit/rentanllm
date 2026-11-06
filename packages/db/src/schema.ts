@@ -202,6 +202,11 @@ export const listings = pgTable(
 export const paidRequests = pgTable(
   "paid_requests",
   {
+    /**
+     * Sequence number of this payment's message on the spend audit log (an HCS topic);
+     * null until the gateway has posted it, or when the log is off.
+     */
+    auditSequence: bigint("audit_sequence", { mode: "number" }),
     cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
     cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
     createdAt: createdAt(),

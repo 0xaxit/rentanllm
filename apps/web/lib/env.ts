@@ -53,3 +53,7 @@ export const RPC_URL =
 export const SITE_URL = trimSlash(
   process.env.NEXT_PUBLIC_SITE_URL?.trim() || DEFAULT_SITE_URL
 );
+
+/** The HCS topic the gateway posts one message to per settled payment. */
+export const HCS_AUDIT_TOPIC_ID =
+  process.env.NEXT_PUBLIC_HCS_AUDIT_TOPIC_ID?.trim() || "0.0.11332573";
