@@ -5,24 +5,16 @@ import { GroupedList, GroupedRow } from "@/components/app-shell/grouped-list";
 import { AppMain, PageHeader } from "@/components/app-shell/page-header";
 import { CopyButton } from "@/components/copy-button";
 import { AgentWalletCard } from "@/components/market/agent-wallet-card";
-import { ArkivBoard } from "@/components/market/arkiv-board";
-import { PaymentRow } from "@/components/market/payment-row";
 import { UseTabs } from "@/components/market/use-tabs";
 import type { UseMode } from "@/components/market/use-tabs";
 import {
   BlockHeading,
   Callout,
-  LiveCursor,
   Note,
 } from "@/components/primitives";
 import { SignInButton } from "@/components/wallet/sign-in-button";
-import {
-  getAgentWallet,
-  getMarketOffers,
-  getPaidRequests,
-} from "@/lib/api/queries";
+import { getAgentWallet, getMarketOffers } from "@/lib/api/queries";
 import type { AgentWallet } from "@/lib/api/types";
-import { getArkivBoard } from "@/lib/arkiv";
 import { GATEWAY_API_BASE, GATEWAY_URL, MCP_URL } from "@/lib/env";
 import { marketModels } from "@/lib/market";
 import { formatPrice } from "@/lib/money";
@@ -228,11 +220,9 @@ const MarketPage = async ({
 }: {
   searchParams: Promise<{ use?: string | string[] }>;
 }) => {
-  const [{ use }, offers, payments, arkiv, walletResult] = await Promise.all([
+  const [{ use }, offers, walletResult] = await Promise.all([
     searchParams,
     getMarketOffers(),
-    getPaidRequests(),
-    getArkivBoard(),
     getAgentWallet(),
   ]);
   const wallet: WalletState = walletResult.ok
@@ -285,26 +275,6 @@ const MarketPage = async ({
         initial={initialMode(use)}
         mcp={<McpPanel wallet={wallet} />}
       />
-      {payments.ok && (
-        <GroupedList
-          footer="every payment settled on chain before its request ran"
-          title="LATEST PAID REQUESTS"
-        >
-          {payments.data.map((request) => (
-            <PaymentRow key={request.requestId} request={request} />
-          ))}
-          {payments.data.length === 0 && (
-            <GroupedRow
-              label={
-                <span className="flex items-center gap-2">
-                  waiting for the first paid request <LiveCursor />
-                </span>
-              }
-            />
-          )}
-        </GroupedList>
-      )}
-      <ArkivBoard read={arkiv} />
     </AppMain>
   );
 };

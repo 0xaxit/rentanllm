@@ -147,7 +147,7 @@ With `RENTANLLM_MCP_APPROVAL=world`, any payment above the threshold waits for t
 
 ## Arkiv
 
-The gateway writes the live offers and one receipt per paid request to Arkiv's Rabdi testnet. The market page reads them back from Arkiv. See [`arkiv/`](arkiv/) for the schema and how each part is used.
+The gateway writes the live offers and one receipt per paid request to Arkiv's Rabdi testnet. Claude Desktop's `list_models` reads the offers back from Arkiv, not from our database. See [`arkiv/`](arkiv/) for the schema and how each part is used.
 
 - **Writer wallet:** `0x7A67B250ECa8Ed822B8439b331f8Eff22c1C20F8`
 - **Query to run** (no account or key needed):
