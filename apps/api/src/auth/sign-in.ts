@@ -1,19 +1,26 @@
+import { randomBytes } from "node:crypto";
+
 import { InvalidRequest, Unauthorized } from "@rentanllm/api-contract";
 import type { User } from "@rentanllm/api-contract";
 import { Effect } from "effect";
 import { getAddress, isAddress } from "viem";
 import type { Hex } from "viem";
-import {
-  generateSiweNonce,
-  parseSiweMessage,
-  validateSiweMessage,
-} from "viem/siwe";
+import { parseSiweMessage, validateSiweMessage } from "viem/siwe";
 
 import { currentDate } from "../clock";
 import { ApiConfig } from "../config";
 import { AuthStore } from "./auth-store";
 import { newSessionToken, sessionTokenHash } from "./session-token";
 import { SignatureVerifier } from "./signature-verifier";
+
+const NONCE_BYTES = 24;
+
+/**
+ * 48 hex characters from the OS CSPRNG. Not viem's generateSiweNonce: it slices one shared
+ * random buffer one character further each call, so consecutive nonces overlap and the
+ * next one can be guessed from the last.
+ */
+const newNonce = () => randomBytes(NONCE_BYTES).toString("hex");
 
 /** Issues a single-use SIWE nonce bound to `address`. */
 export const issueNonce = Effect.fn("auth.issueNonce")(function* issueNonceGen(
@@ -24,7 +31,7 @@ export const issueNonce = Effect.fn("auth.issueNonce")(function* issueNonceGen(
   }
   const config = yield* ApiConfig;
   const store = yield* AuthStore;
-  const nonce = generateSiweNonce();
+  const nonce = newNonce();
   const expiresAt = new Date(
     (yield* currentDate).getTime() + config.nonceTtlMs
   );

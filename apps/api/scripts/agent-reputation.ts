@@ -37,7 +37,9 @@ const agentId = BigInt(arg);
 const monitor = (process.env.MONITOR ?? DEFAULT_MONITOR) as Address;
 const client = createPublicClient({
   chain: hederaTestnet,
-  transport: http(process.env.HEDERA_RPC_URL ?? "https://testnet.hashio.io/api"),
+  transport: http(
+    process.env.HEDERA_RPC_URL ?? "https://testnet.hashio.io/api"
+  ),
 });
 
 const [owner, uri] = await Promise.all([
@@ -70,6 +72,7 @@ const summaries = await Promise.all(
 );
 for (const [i, { tag, unit }] of TAGS.entries()) {
   const [count, value, decimals] = summaries[i] ?? [0n, 0n, 0];
-  const shown = count === 0n ? "no reports" : `${formatUnits(value, decimals)}${unit}`;
+  const shown =
+    count === 0n ? "no reports" : `${formatUnits(value, decimals)}${unit}`;
   console.log(`  ${tag.padEnd(12)} ${shown} (${count} reports)`);
 }
