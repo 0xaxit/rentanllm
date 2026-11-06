@@ -121,3 +121,7 @@ The gateway writes the live offers and one receipt per paid request to Arkiv's R
 ## AI use
 
 Much of this code was written with Claude Code (Anthropic), under the team's direction and review.
+
+## License
+
+[MIT](LICENSE)
