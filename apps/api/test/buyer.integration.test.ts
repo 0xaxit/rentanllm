@@ -20,6 +20,7 @@ const LIMITS = {
   maxPerRequestUsdc: "50000",
   paused: false,
   perSellerDailyUsdc: "250000",
+  worldApprovalAboveUsdc: "1000",
 };
 
 /** A seller with one live open-models listing, to hang paid requests off. */
@@ -114,6 +115,7 @@ describe.runIf(baseUrl !== undefined)("buyer limits", () => {
     );
     expect(row?.payerAccount).toBe(BUYER_ACCOUNT);
     expect(row?.perSellerDailyMicros).toBe(250_000n);
+    expect(row?.worldApprovalAboveMicros).toBe(1000n);
     const overview = await app.call("GET", "/buyer/overview", {
       cookie: buyer.cookie,
     });
@@ -122,7 +124,7 @@ describe.runIf(baseUrl !== undefined)("buyer limits", () => {
       allowedSellers: [SELLER],
     });
 
-    // Saving again replaces the limits.
+    // Saving again replaces the limits. A save without the World ID limit keeps it.
     const cleared = await app.call("PUT", "/buyer/policy", {
       body: {
         allowedSellers: null,
@@ -133,7 +135,16 @@ describe.runIf(baseUrl !== undefined)("buyer limits", () => {
       },
       cookie: buyer.cookie,
     });
-    expect(cleared.json).toMatchObject({ allowedSellers: null, paused: true });
+    expect(cleared.json).toMatchObject({
+      allowedSellers: null,
+      paused: true,
+      worldApprovalAboveUsdc: "1000",
+    });
+    const noWorld = await app.call("PUT", "/buyer/policy", {
+      body: { ...LIMITS, worldApprovalAboveUsdc: null },
+      cookie: buyer.cookie,
+    });
+    expect(noWorld.json.worldApprovalAboveUsdc).toBeNull();
   });
 
   it("rejects limits that are zero and sellers that are not Hedera accounts", async () => {

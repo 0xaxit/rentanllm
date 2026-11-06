@@ -74,18 +74,31 @@ const ended = (now: Date): ApprovalPatch => ({
   deviceCode: null,
 });
 
+/**
+ * Who may read and use an approval: whoever holds its secret (the local MCP server), or
+ * the signed-in user it belongs to (the hosted connector, which never hands out a secret).
+ */
+export type ApprovalCredential =
+  | { readonly secret: string }
+  | { readonly ownerUserId: string };
+
 export const createApproval = Effect.fn("approvals.create")(
   function* createApprovalGen(input: {
     readonly amountUsdc: bigint;
     readonly description: string;
     readonly expectedSubject?: string;
     readonly network: string;
+    /** Set for hosted-connector approvals; the user's first approver is then pinned. */
+    readonly ownerUserId?: string;
     readonly payTo: string;
     readonly payer: string;
   }) {
     const idp = yield* worldIdp;
     const store = yield* ApprovalStore;
-    const expectedSubject = input.expectedSubject ?? null;
+    const ownerUserId = input.ownerUserId ?? null;
+    const pinned =
+      ownerUserId === null ? null : yield* store.pinnedSubject(ownerUserId);
+    const expectedSubject = input.expectedSubject ?? pinned;
     const device = yield* fromWorld(() =>
       idp.startDeviceAuthorization({ expectedSubject })
     );
@@ -105,6 +118,7 @@ export const createApproval = Effect.fn("approvals.create")(
       nextPollAt: new Date(
         now.getTime() + device.intervalSeconds * MS_PER_SECOND
       ),
+      ownerUserId,
       payTo: input.payTo,
       payer: input.payer,
       pollIntervalSeconds: device.intervalSeconds,
@@ -117,14 +131,19 @@ export const createApproval = Effect.fn("approvals.create")(
   }
 );
 
-/** The approval, if `secret` is its secret. A wrong secret looks like a missing approval. */
+const allows = (row: ApprovalRow, credential: ApprovalCredential): boolean =>
+  "secret" in credential
+    ? safeEqual(row.secretHash, sha256Hex(credential.secret))
+    : row.ownerUserId === credential.ownerUserId;
+
+/** The approval, if `credential` may use it. Otherwise it looks like a missing approval. */
 const authorized = Effect.fn("approvals.authorized")(function* authorizedGen(
   id: string,
-  secret: string
+  credential: ApprovalCredential
 ) {
   const store = yield* ApprovalStore;
   const row = yield* store.find(id);
-  if (row === undefined || !safeEqual(row.secretHash, sha256Hex(secret))) {
+  if (row === undefined || !allows(row, credential)) {
     return yield* new NotFound({ message: `no approval ${id}` });
   }
   return row;
@@ -214,8 +233,8 @@ const refresh = Effect.fn("approvals.refresh")(function* refreshGen(
 });
 
 export const checkApproval = Effect.fn("approvals.check")(
-  function* checkApprovalGen(id: string, secret: string) {
-    const row = yield* authorized(id, secret);
+  function* checkApprovalGen(id: string, credential: ApprovalCredential) {
+    const row = yield* authorized(id, credential);
     return toApproval(yield* refresh(row));
   }
 );
@@ -225,11 +244,11 @@ export const consumeApproval = Effect.fn("approvals.consume")(
     id: string,
     input: {
       readonly amountUsdc: bigint;
+      readonly credential: ApprovalCredential;
       readonly payTo: string;
-      readonly secret: string;
     }
   ) {
-    const row = yield* refresh(yield* authorized(id, input.secret));
+    const row = yield* refresh(yield* authorized(id, input.credential));
     if (row.status !== "approved") {
       return yield* new Conflict({
         message: `approval ${id} is ${row.status}, not approved; no payment may be made with it`,
@@ -257,8 +276,8 @@ export const consumeApproval = Effect.fn("approvals.consume")(
 );
 
 export const cancelApproval = Effect.fn("approvals.cancel")(
-  function* cancelApprovalGen(id: string, secret: string) {
-    const row = yield* authorized(id, secret);
+  function* cancelApprovalGen(id: string, credential: ApprovalCredential) {
+    const row = yield* authorized(id, credential);
     if (row.status !== "pending" && row.status !== "approved") {
       return yield* new Conflict({
         message: `approval ${id} is already ${row.status}`,

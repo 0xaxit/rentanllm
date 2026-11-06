@@ -31,6 +31,8 @@ import {
   MCP_APP_MIME_TYPE,
 } from "./image-viewer";
 import type { ImageCaption } from "./image-viewer";
+import { HostedWorldError, worldGate } from "./world-gate";
+import type { HostedWorld } from "./world-gate";
 
 const NETWORK = "hedera:testnet";
 /** The image model the market sells today; generate_image uses it unless told otherwise. */
@@ -85,6 +87,8 @@ export interface McpContext {
   } | null>;
   /** Where the user creates and funds the agent wallet. */
   readonly walletPage: string;
+  /** World ID approval above the user's threshold; null when the API has no World ID. */
+  readonly world: HostedWorld | null;
 }
 
 const text = (value: string) => ({
@@ -129,9 +133,16 @@ const toRequest = (input: {
 };
 
 const explain = (error: unknown) =>
-  error instanceof MarketError
+  error instanceof MarketError || error instanceof HostedWorldError
     ? error.message
     : `unexpected failure: ${String(error)}`;
+
+const worldApprovalId = z
+  .string()
+  .optional()
+  .describe(
+    "Only after this tool returned a World ID link: the world_approval_id it gave, to pay once the person has approved"
+  );
 
 const WEBSITE = "https://rentanllm.xyz";
 
@@ -211,7 +222,7 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
     },
     {
       instructions:
-        "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models once per question (it reads the public Arkiv board and its answer is complete, so do not call it again to check), then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. For a picture, use generate_image with an image model (kind image in list_models). agent_wallet shows the balance and recent payments. When you show a buy_inference result, show the exact prompt that was sent and the model's answer verbatim (in a quote or code block), then one payment line with the HashScan link. Do not summarize, grade or comment on the answer unless the user asks.",
+        "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models once per question (it reads the public Arkiv board and its answer is complete, so do not call it again to check), then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. For a picture, use generate_image with an image model (kind image in list_models). agent_wallet shows the balance and recent payments. When you show a buy_inference result, show the exact prompt that was sent and the model's answer verbatim (in a quote or code block), then one payment line with the HashScan link. Do not summarize, grade or comment on the answer unless the user asks. If buy_inference or generate_image says the payment needs World ID approval, show the person the link and code exactly, let them approve on World ID, then call the same tool again with the same arguments plus the world_approval_id it gave; if they no longer want it, call cancel_payment.",
     }
   );
 
@@ -287,6 +298,7 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
           .string()
           .optional()
           .describe('Refuse if the price is above this, e.g. "0.01"'),
+        world_approval_id: worldApprovalId,
       },
       outputSchema: purchaseShape,
       title: "Buy inference",
@@ -315,6 +327,18 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
           return failure(
             `Not paid: the agent wallet ${signer.accountId} holds ${formatUsdc(balance)} USDC and this costs ${formatUsdc(price)}. Add USDC at ${ctx.walletPage}`
           );
+        }
+        const gate = await worldGate(ctx.world, {
+          amountUsdc: formatUsdc(price),
+          approvalId: input.world_approval_id,
+          description: `${request.model}, up to ${request.maxTokens} tokens`,
+          payTo: quote.terms.payTo,
+          payer: signer.accountId,
+          priceMicros: price,
+          tool: "buy_inference",
+        });
+        if (!gate.pay) {
+          return failure(gate.text);
         }
         const payment = await signPaymentAs(
           signer.accountId,
@@ -352,6 +376,36 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
         };
       } catch (error) {
         return failure(`Not paid: ${explain(error)}`);
+      }
+    }
+  );
+
+  server.registerTool(
+    "cancel_payment",
+    {
+      annotations: {
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+        readOnlyHint: false,
+      },
+      description:
+        "Drops a payment that buy_inference or generate_image held for World ID approval. Nothing is paid, and that approval can no longer be used, even if the person approves it afterwards.",
+      inputSchema: {
+        world_approval_id: z
+          .string()
+          .describe("The world_approval_id the held tool call returned"),
+      },
+      title: "Cancel payment",
+    },
+    async (input) => {
+      if (ctx.world === null) {
+        return failure("World ID approvals are not set up on this server.");
+      }
+      try {
+        return text(await ctx.world.cancel(input.world_approval_id));
+      } catch (error) {
+        return failure(explain(error));
       }
     }
   );
@@ -402,6 +456,7 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
           .enum(IMAGE_SIZES)
           .optional()
           .describe("Default 512x512, which keeps the reply small"),
+        world_approval_id: worldApprovalId,
       },
       title: "Generate image",
     },
@@ -433,6 +488,18 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
           return failure(
             `Not paid: the agent wallet ${signer.accountId} holds ${formatUsdc(balance)} USDC and this costs ${formatUsdc(price)}. Add USDC at ${ctx.walletPage}`
           );
+        }
+        const gate = await worldGate(ctx.world, {
+          amountUsdc: formatUsdc(price),
+          approvalId: input.world_approval_id,
+          description: `${request.model} image, ${request.size}`,
+          payTo: quote.terms.payTo,
+          payer: signer.accountId,
+          priceMicros: price,
+          tool: "generate_image",
+        });
+        if (!gate.pay) {
+          return failure(gate.text);
         }
         const payment = await signPaymentAs(
           signer.accountId,

@@ -21,6 +21,7 @@ const server = buildMcpServer({
   recent: () => Promise.resolve([]),
   signer: () => Promise.resolve(null),
   walletPage: "https://rentanllm.example/budget",
+  world: null,
 });
 const client = new Client({ name: "test", version: "1" });
 

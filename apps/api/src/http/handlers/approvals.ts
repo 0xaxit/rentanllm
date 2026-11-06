@@ -21,13 +21,19 @@ export const ApprovalsHandlers = HttpApiBuilder.group(
     return handlers
       .handle("create", ({ payload }) => provide(createApproval(payload)))
       .handle("check", ({ params, payload }) =>
-        provide(checkApproval(params.approvalId, payload.secret))
+        provide(checkApproval(params.approvalId, { secret: payload.secret }))
       )
       .handle("consume", ({ params, payload }) =>
-        provide(consumeApproval(params.approvalId, payload))
+        provide(
+          consumeApproval(params.approvalId, {
+            amountUsdc: payload.amountUsdc,
+            credential: { secret: payload.secret },
+            payTo: payload.payTo,
+          })
+        )
       )
       .handle("cancel", ({ params, payload }) =>
-        provide(cancelApproval(params.approvalId, payload.secret))
+        provide(cancelApproval(params.approvalId, { secret: payload.secret }))
       );
   })
 );

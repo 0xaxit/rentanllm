@@ -339,6 +339,11 @@ export const buyerPolicies = pgTable(
     userId: uuid("user_id")
       .primaryKey()
       .references(() => users.id, { onDelete: "cascade" }),
+    /**
+     * Above this, the hosted connector holds a payment until the person approves it with
+     * World ID. Null: never ask. The gateway does not read it.
+     */
+    worldApprovalAboveMicros: micros("world_approval_above_micros"),
   },
   (t) => [
     check(
@@ -486,6 +491,14 @@ export const worldApprovals = pgTable(
     network: text("network").notNull(),
     /** No poll of World's token endpoint before this (its interval, plus slow_down). */
     nextPollAt: timestamptz("next_poll_at").notNull(),
+    /**
+     * The signed-in user a hosted-connector approval belongs to. Set only for those: the
+     * hosted MCP server authorizes by this user instead of handing out the secret, and
+     * the first person to approve is pinned for the user.
+     */
+    ownerUserId: uuid("owner_user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
     payTo: text("pay_to").notNull(),
     /** The paying account (Hedera 0.0.x). */
     payer: text("payer").notNull(),
@@ -502,6 +515,7 @@ export const worldApprovals = pgTable(
   },
   (t) => [
     index("world_approvals_expires_at_idx").on(t.expiresAt),
+    index("world_approvals_owner_user_id_idx").on(t.ownerUserId),
     check("world_approvals_amount_positive", sql`${t.amountMicros} > 0`),
   ]
 );

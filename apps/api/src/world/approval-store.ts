@@ -1,6 +1,6 @@
 import { Db } from "@rentanllm/db";
 import { worldApprovals } from "@rentanllm/db/schema";
-import { and, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 
 export type ApprovalRow = typeof worldApprovals.$inferSelect;
@@ -21,6 +21,8 @@ export interface ApprovalStoreShape {
     readonly payTo: string;
   }) => Effect.Effect<ApprovalRow | undefined>;
   readonly find: (id: string) => Effect.Effect<ApprovalRow | undefined>;
+  /** The World subject that first approved a payment for this user; null when none has. */
+  readonly pinnedSubject: (ownerUserId: string) => Effect.Effect<string | null>;
   readonly insert: (row: NewApprovalRow) => Effect.Effect<ApprovalRow>;
   /** Applies `patch` only while the approval is still in `fromStatus`. */
   readonly transition: (
@@ -79,6 +81,23 @@ export const ApprovalStorePg = Layer.effect(ApprovalStore)(
                 ? Effect.die(new Error("approval insert returned no row"))
                 : Effect.succeed(inserted)
             ),
+            Effect.orDie
+          ),
+      pinnedSubject: (ownerUserId) =>
+        db
+          .select({ subject: worldApprovals.worldSubject })
+          .from(worldApprovals)
+          .where(
+            and(
+              eq(worldApprovals.ownerUserId, ownerUserId),
+              eq(worldApprovals.status, "used"),
+              isNotNull(worldApprovals.worldSubject)
+            )
+          )
+          .orderBy(asc(worldApprovals.usedAt))
+          .limit(1)
+          .pipe(
+            Effect.map(([row]) => row?.subject ?? null),
             Effect.orDie
           ),
       transition: (id, fromStatus, patch) =>

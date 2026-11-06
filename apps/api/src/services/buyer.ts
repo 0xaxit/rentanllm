@@ -44,6 +44,7 @@ const toPolicy = (row: PolicyRow): BuyerPolicy => ({
   maxPerRequestUsdc: row.maxPerRequestMicros,
   paused: row.paused,
   perSellerDailyUsdc: row.perSellerDailyMicros,
+  worldApprovalAboveUsdc: row.worldApprovalAboveMicros,
 });
 
 /** The Hedera account behind the user's sign-in wallet; null when it has none. */
@@ -132,7 +133,9 @@ export const buyerOverview = Effect.fn("buyer.overview")(
 export const updateBuyerPolicy = Effect.fn("buyer.updatePolicy")(
   function* updateBuyerPolicyGen(
     userId: string,
-    input: BuyerPolicy,
+    input: Omit<BuyerPolicy, "worldApprovalAboveUsdc"> & {
+      readonly worldApprovalAboveUsdc?: bigint | null;
+    },
     now: Date
   ) {
     const db = yield* Db;
@@ -154,6 +157,9 @@ export const updateBuyerPolicy = Effect.fn("buyer.updatePolicy")(
       payerAccount: account,
       perSellerDailyMicros: input.perSellerDailyUsdc,
       updatedAt: now,
+      ...(input.worldApprovalAboveUsdc === undefined
+        ? {}
+        : { worldApprovalAboveMicros: input.worldApprovalAboveUsdc }),
     };
     const [row] = yield* db
       .insert(buyerPolicies)
