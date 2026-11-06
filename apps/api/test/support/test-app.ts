@@ -14,6 +14,9 @@ import { hederaMirrorStub } from "../../src/hedera/mirror";
 import type { HederaMirror } from "../../src/hedera/mirror";
 import { erc8004Stub } from "../../src/reputation/erc8004";
 import type { Erc8004 } from "../../src/reputation/erc8004";
+import { ApprovalStorePg } from "../../src/world/approval-store";
+import type { WorldIdp } from "../../src/world/idp";
+import { WorldIdpService } from "../../src/world/world-idp-service";
 import { makeWallet } from "./wallet";
 
 const SESSION_COOKIE_PATTERN = /rentanllm_session=(?<token>[^;]*)/u;
@@ -48,7 +51,9 @@ export const makeTestApp = (
   /** The Hedera mirror node; by default every wallet has an account that takes USDC. */
   mirror: Layer.Layer<HederaMirror> = hederaMirrorStub(),
   /** The ERC-8004 registries; by default no agent exists on chain. */
-  erc8004: Layer.Layer<Erc8004> = erc8004Stub(new Map())
+  erc8004: Layer.Layer<Erc8004> = erc8004Stub(new Map()),
+  /** The World IdP; null leaves World ID approvals off. */
+  worldIdp: WorldIdp | null = null
 ) => {
   const config = makeTestConfig(configOverrides);
   const services = Layer.mergeAll(
@@ -56,7 +61,9 @@ export const makeTestApp = (
     SignatureVerifierEoa,
     mirror,
     erc8004,
-    agentWalletChainStub()
+    agentWalletChainStub(),
+    ApprovalStorePg,
+    Layer.succeed(WorldIdpService)(worldIdp)
   ).pipe(
     Layer.provideMerge(dbLayer({ maxConnections: 4, url: Redacted.make(url) })),
     Layer.provideMerge(Layer.succeed(ApiConfig)(config)),

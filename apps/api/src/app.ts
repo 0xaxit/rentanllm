@@ -16,6 +16,7 @@ import { HederaMirrorLive } from "./hedera/mirror";
 import { AuthenticationLive } from "./http/authentication";
 import { CronAuthLive } from "./http/cron-auth";
 import { AgentsHandlers } from "./http/handlers/agents";
+import { ApprovalsHandlers } from "./http/handlers/approvals";
 import { AuthHandlers } from "./http/handlers/auth";
 import { BuyerHandlers } from "./http/handlers/buyer";
 import { CronHandlers } from "./http/handlers/cron";
@@ -27,6 +28,8 @@ import { SystemHandlers } from "./http/handlers/system";
 import { McpRoutes } from "./http/mcp-routes";
 import { ObservabilityLive } from "./observability";
 import { Erc8004Live } from "./reputation/erc8004";
+import { ApprovalStorePg } from "./world/approval-store";
+import { WorldIdpLive } from "./world/world-idp-service";
 
 /** All endpoint handlers; requires the app services (Db, AuthStore, ...). */
 export const HandlersLayer = Layer.mergeAll(
@@ -38,7 +41,8 @@ export const HandlersLayer = Layer.mergeAll(
   BuyerHandlers,
   AgentsHandlers,
   OAuthHandlers,
-  CronHandlers
+  CronHandlers,
+  ApprovalsHandlers
 );
 
 /** CORS for the web app's origins, with credentials (the session cookie). */
@@ -63,13 +67,15 @@ export const RoutesLayer = Layer.mergeAll(
   Layer.provide([AuthenticationLive, CronAuthLive])
 );
 
-/** Production services: Postgres (DATABASE_URL), SIWE verification, the Hedera mirror node, ERC-8004 over Hashio, env config. */
+/** Production services: Postgres (DATABASE_URL), SIWE verification, the Hedera mirror node, ERC-8004 over Hashio, World ID, env config. */
 export const ServicesLive = Layer.mergeAll(
   AuthStorePg,
   SignatureVerifierLive,
   HederaMirrorLive,
   Erc8004Live,
-  AgentWalletChainLive
+  AgentWalletChainLive,
+  ApprovalStorePg,
+  WorldIdpLive
 ).pipe(Layer.provideMerge(DbLive), Layer.provideMerge(ApiConfigLive));
 
 export const AppLive = RoutesLayer.pipe(

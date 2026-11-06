@@ -1,6 +1,7 @@
 import { HttpApi, OpenApi } from "effect/http-api";
 
 import { AgentsGroup } from "./groups/agents";
+import { ApprovalsGroup } from "./groups/approvals";
 import { AuthGroup } from "./groups/auth";
 import { BuyerGroup } from "./groups/buyer";
 import { CronGroup } from "./groups/cron";
@@ -21,4 +22,5 @@ export class RentAnLlmApi extends HttpApi.make("rentanllm")
   .add(AgentsGroup)
   .add(OAuthGroup)
   .add(CronGroup)
+  .add(ApprovalsGroup)
   .annotateMerge(OpenApi.annotations({ title: "RentAnLLM API" })) {}

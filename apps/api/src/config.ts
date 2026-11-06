@@ -18,6 +18,17 @@ export interface ApiConfigShape {
   readonly siweDomain: string;
   /** Browser origins allowed to call the API with credentials (CORS). */
   readonly webOrigins: readonly string[];
+  /** World ID Agent Pass (World IdP) for payment approvals; undefined turns them off. */
+  readonly world: WorldConfig | undefined;
+}
+
+export interface WorldConfig {
+  /** Accepted ID-token `acr` values; empty accepts any class World issues. */
+  readonly acceptedAcr: readonly string[];
+  readonly clientId: string;
+  readonly clientSecret: Redacted.Redacted;
+  /** https://sandbox.auth.world.org (fake identities) or https://auth.world.org. */
+  readonly issuer: string;
 }
 
 export class ApiConfig extends Context.Service<ApiConfig, ApiConfigShape>()(
@@ -30,14 +41,47 @@ const DEFAULT_SESSION_TTL_HOURS = 168;
 const DEFAULT_NONCE_TTL_SECONDS = 600;
 const DEFAULT_NODE_STALE_SECONDS = 90;
 const MIN_SECRET_LENGTH = 32;
+const DEFAULT_WORLD_ISSUER = "https://sandbox.auth.world.org";
+const TRAILING_SLASHES = /\/+$/u;
 const DEFAULT_PUBLIC_URL = "https://api.rentanllm.xyz";
 const DEFAULT_GATEWAY_URL = "https://gw.rentanllm.xyz";
 
 const publicOrigin = (name: string, fallback: string) =>
   Config.String(name).pipe(
     Config.withDefault(fallback),
-    Config.map((value) => value.replace(/\/+$/u, ""))
+    Config.map((value) => value.replace(TRAILING_SLASHES, ""))
   );
+
+const commaList = (value: string): readonly string[] =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+/** World ID settings: on only when both the client id and secret are set. */
+const worldFromEnv = Config.all({
+  acceptedAcr: Config.String("WORLD_ID_ACCEPTED_ACR").pipe(
+    Config.withDefault(""),
+    Config.map(commaList)
+  ),
+  clientId: Config.option(Config.String("WORLD_ID_CLIENT_ID")),
+  clientSecret: Config.option(Config.Redacted("WORLD_ID_CLIENT_SECRET")),
+  issuer: Config.String("WORLD_ID_ISSUER").pipe(
+    Config.withDefault(DEFAULT_WORLD_ISSUER),
+    Config.map((value) => value.replace(TRAILING_SLASHES, ""))
+  ),
+}).pipe(
+  Config.map(({ acceptedAcr, clientId, clientSecret, issuer }) =>
+    Option.isSome(clientId) && Option.isSome(clientSecret)
+      ? ({
+          acceptedAcr,
+          clientId: clientId.value,
+          clientSecret: clientSecret.value,
+          issuer,
+        } satisfies WorldConfig)
+      : undefined
+  )
+);
 
 const secret = (name: string) =>
   Config.Redacted(name).pipe(
@@ -75,13 +119,9 @@ export const apiConfigFromEnv = Config.all({
   siweDomain: Config.String("SIWE_DOMAIN"),
   webOrigins: Config.String("WEB_ORIGINS").pipe(
     Config.withDefault(""),
-    Config.map((value) =>
-      value
-        .split(",")
-        .map((origin) => origin.trim())
-        .filter((origin) => origin.length > 0)
-    )
+    Config.map(commaList)
   ),
+  world: worldFromEnv,
 });
 
 export const ApiConfigLive = Layer.effect(ApiConfig)(
@@ -104,5 +144,6 @@ export const makeTestConfig = (
   sessionTtlMs: DEFAULT_SESSION_TTL_HOURS * MS_PER_HOUR,
   siweDomain: "localhost:3000",
   webOrigins: ["http://localhost:3000"],
+  world: undefined,
   ...overrides,
 });

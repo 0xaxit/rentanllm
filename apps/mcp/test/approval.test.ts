@@ -59,7 +59,7 @@ describe("approval threshold", () => {
         RENTANLLM_MCP_ACCOUNT: "0.0.1",
         RENTANLLM_MCP_APPROVAL: "yes",
       })
-    ).toThrow("must be touchid, threshold or none");
+    ).toThrow("must be touchid, threshold, world or none");
   });
 
   it("never asks the person in the other modes", () => {

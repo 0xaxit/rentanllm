@@ -16,19 +16,23 @@ export type PayNetwork = "hedera:testnet";
  * - `touchid`: the person approves every payment with Touch ID.
  * - `threshold`: payments up to `autoApproveMicros` go through on their own; larger ones
  *   wait for the person to confirm in the MCP client (see approval.ts).
+ * - `world`: like `threshold`, but the person approves larger payments with World ID Agent
+ *   Pass, validated by the RentAnLLM API (see world.ts).
  * - `none`: no person; the caps are the only limit (the autonomous `agent` command).
  */
-export type Approval = "touchid" | "threshold" | "none";
+export type Approval = "touchid" | "threshold" | "world" | "none";
 
 export interface McpConfig {
   /** Hedera account that pays (0.0.x). */
   readonly account: string;
+  /** RentAnLLM API base URL, for World ID approvals (approval "world"). */
+  readonly apiUrl: string | null;
   readonly approval: Approval;
-  /** With approval "threshold": the largest payment made without asking the person. */
+  /** With approval "threshold" or "world": the largest payment made without asking the person. */
   readonly autoApproveMicros: bigint;
   /** Gateway base URL, without /v1. */
   readonly gatewayUrl: string;
-  /** With approval "threshold" or "none": the payer key, from env or a key file. */
+  /** With approval "threshold", "world" or "none": the payer key, from env or a key file. */
   readonly insecureKey: string | null;
   readonly maxPerDayMicros: bigint;
   readonly maxPerRequestMicros: bigint;
@@ -133,7 +137,7 @@ const parseApproval = (
   env: NodeJS.ProcessEnv
 ): { readonly approval: Approval; readonly insecureKey: string | null } => {
   const mode = env.RENTANLLM_MCP_APPROVAL ?? "touchid";
-  if (mode === "none" || mode === "threshold") {
+  if (mode === "none" || mode === "threshold" || mode === "world") {
     const insecureKey = keyWithoutApproval(env);
     if (insecureKey === null) {
       throw new ConfigError(
@@ -144,22 +148,41 @@ const parseApproval = (
   }
   if (mode !== "touchid") {
     throw new ConfigError(
-      `RENTANLLM_MCP_APPROVAL must be touchid, threshold or none, not ${mode}`
+      `RENTANLLM_MCP_APPROVAL must be touchid, threshold, world or none, not ${mode}`
     );
   }
   if (process.platform !== "darwin") {
     throw new ConfigError(
-      "Touch ID approval needs macOS; elsewhere set RENTANLLM_MCP_APPROVAL=threshold or none"
+      "Touch ID approval needs macOS; elsewhere set RENTANLLM_MCP_APPROVAL=threshold, world or none"
     );
   }
   return { approval: "touchid", insecureKey: null };
 };
 
+/** World approvals need the API that holds World's client secret. */
+const parseApiUrl = (
+  env: NodeJS.ProcessEnv,
+  approval: Approval
+): string | null => {
+  const url = env.RENTANLLM_API_URL?.trim().replace(TRAILING_SLASHES, "") ?? "";
+  if (url.length > 0) {
+    return url;
+  }
+  if (approval === "world") {
+    throw new ConfigError(
+      "RENTANLLM_MCP_APPROVAL=world needs RENTANLLM_API_URL, the RentAnLLM API that validates World ID approvals"
+    );
+  }
+  return null;
+};
+
 export const loadConfig = (env: NodeJS.ProcessEnv = process.env): McpConfig => {
   const network = parseNetwork(env);
+  const approval = parseApproval(env);
   return {
     account: parseAccount(env),
-    ...parseApproval(env),
+    apiUrl: parseApiUrl(env, approval.approval),
+    ...approval,
     autoApproveMicros: usdcToMicros(
       env.RENTANLLM_MCP_AUTO_APPROVE_USDC ?? DEFAULT_AUTO_APPROVE_USDC
     ),

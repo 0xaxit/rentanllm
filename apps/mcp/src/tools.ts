@@ -2,8 +2,11 @@
  * The MCP tools. Reads (what is for sale, what a request would cost, what has been spent)
  * are marked read-only. `buy_inference` and `approve_payment` move money and are writes.
  * Who approves a payment depends on the approval mode: Touch ID for every payment, the
- * person above a threshold (approval.ts), or nobody inside the caps.
+ * person above a threshold (approval.ts) in the client or with World ID Agent Pass
+ * (world.ts), or nobody inside the caps.
  */
+import { setTimeout as sleep } from "node:timers/promises";
+
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -21,11 +24,17 @@ import {
 import type { ChatMessage, ChatRequest, Quote } from "./market.ts";
 import { approvedKey, PayerError, signPayment } from "./payer.ts";
 import { PaymentHeldError } from "./payment-held-error.ts";
+import type { HeldPayment } from "./payment-held-error.ts";
 import { appendSpend, readSpends, spentLastDay } from "./spend.ts";
+import { WorldApprovalError, worldClient } from "./world.ts";
+import type { WorldApproval } from "./world.ts";
 
 const DEFAULT_MAX_TOKENS = 512;
 const MAX_TOKENS_LIMIT = 32_768;
 const RECENT_SPENDS = 10;
+/** How long approve_payment waits for the person's World ID answer before returning. */
+const WORLD_WAIT_MS = 45_000;
+const WORLD_CHECK_EVERY_MS = 3000;
 
 const text = (value: string) => ({
   content: [{ text: value, type: "text" as const }],
@@ -72,20 +81,26 @@ const toRequest = (input: RequestInput): ChatRequest => {
 };
 
 const explain = (error: unknown): string => {
-  if (error instanceof MarketError || error instanceof PayerError) {
+  if (
+    error instanceof MarketError ||
+    error instanceof PayerError ||
+    error instanceof WorldApprovalError
+  ) {
     return error.message;
   }
   return `unexpected failure: ${String(error)}`;
 };
 
 type Approve = (reason: string, quote: Quote) => Promise<string>;
+type Sign = typeof signPayment;
 
 /** Runs one purchase and turns the outcome into a tool result. */
 const purchase = async (
   config: McpConfig,
   request: ChatRequest,
   maxPriceMicros: bigint | null,
-  approve: Approve
+  approve: Approve,
+  sign: Sign
 ) => {
   try {
     const result = await buyInference(
@@ -96,7 +111,7 @@ const purchase = async (
         log: (entry) => appendSpend(config.stateDir, entry),
         now: () => new Date(),
         quote: () => requestQuote(config.gatewayUrl, config.network, request),
-        sign: (key, quote) => signPayment(config, key, quote),
+        sign: (key, quote) => sign(config, key, quote),
         spends: () => readSpends(config.stateDir),
       },
       request,
@@ -131,6 +146,19 @@ const purchase = async (
       ].join("\n")
     );
   } catch (error) {
+    const heldForWorld =
+      error instanceof PaymentHeldError ? error.held.world : null;
+    if (error instanceof PaymentHeldError && heldForWorld !== null) {
+      const { held } = error;
+      const world = heldForWorld;
+      return text(
+        [
+          `Not paid yet: ${formatUsdc(held.amountMicros)} USDC to ${held.payTo} is above the ${formatUsdc(config.autoApproveMicros)} USDC this agent may pay on its own, so the person has to approve it with World ID.`,
+          `Show the person this link and code, exactly: ${world.link} (code ${world.userCode}). They approve or deny the payment there.`,
+          `Then call approve_payment with payment_id "${held.id}", amount_usdc "${formatUsdc(held.amountMicros)}" and pay_to "${held.payTo}"; it waits for their answer and pays only if World ID confirms it. If they no longer want it, call cancel_payment. The approval expires at ${held.expiresAt.toISOString()}.`,
+        ].join("\n")
+      );
+    }
     if (error instanceof PaymentHeldError) {
       const { held } = error;
       return text(
@@ -156,11 +184,39 @@ const approvalLine = (config: McpConfig): string => {
   if (config.approval === "threshold") {
     return `approval: automatic up to ${formatUsdc(config.autoApproveMicros)} USDC, the person approves anything above`;
   }
+  if (config.approval === "world") {
+    return `approval: automatic up to ${formatUsdc(config.autoApproveMicros)} USDC, the person approves anything above with World ID Agent Pass`;
+  }
   return "approval: none, the caps are the only limit";
 };
 
-export const registerTools = (server: McpServer, config: McpConfig): void => {
+/** Polls the World approval until the person answers or `WORLD_WAIT_MS` passes. */
+const awaitWorld = async (
+  check: () => Promise<WorldApproval>
+): Promise<WorldApproval> => {
+  const deadline = Date.now() + WORLD_WAIT_MS;
+  let approval = await check();
+  while (approval.status === "pending" && Date.now() < deadline) {
+    // Polling: each check must wait for the one before it.
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    await sleep(WORLD_CHECK_EVERY_MS);
+    // oxlint-disable-next-line eslint/no-await-in-loop
+    approval = await check();
+  }
+  return approval;
+};
+
+/** `sign` is replaceable for tests; it is the only step that uses the payer key. */
+export const registerTools = (
+  server: McpServer,
+  config: McpConfig,
+  sign: Sign = signPayment
+): void => {
   const held = new HeldPayments();
+  const world =
+    config.approval === "world" && config.apiUrl !== null
+      ? worldClient(config.apiUrl, config.stateDir)
+      : null;
 
   /**
    * Asks the person in the client's own dialog (MCP elicitation). "unsupported" when the
@@ -190,6 +246,60 @@ export const registerTools = (server: McpServer, config: McpConfig): void => {
       ? "approved"
       : "declined";
   };
+  /**
+   * Pays a payment held for World ID once the person has approved it there: waits for
+   * World's answer through the API, has the API consume the approval for exactly this
+   * amount and payee, and only then signs. Any other answer releases the hold unpaid.
+   */
+  const payWithWorld = async (waiting: HeldPayment) => {
+    const hold = waiting.world;
+    if (hold === null || world === null) {
+      return failure("Not paid: this payment is not waiting for World ID.");
+    }
+    let approval: WorldApproval;
+    try {
+      approval = await awaitWorld(() =>
+        world.check(hold.approvalId, hold.secret)
+      );
+    } catch (error) {
+      return failure(`Not paid: ${explain(error)}.`);
+    }
+    if (approval.status === "pending") {
+      return text(
+        `Not paid yet: the person has not answered on World ID. Remind them of ${hold.link} (code ${hold.userCode}), then call approve_payment again with the same arguments. It expires at ${waiting.expiresAt.toISOString()}.`
+      );
+    }
+    held.release(waiting.id);
+    if (approval.status !== "approved") {
+      const why =
+        approval.failureReason === null ? "" : `: ${approval.failureReason}`;
+      return failure(
+        `Not paid: the World ID approval was ${approval.status}${why}. Nothing was signed. Ask the person before trying again.`
+      );
+    }
+    return await purchase(
+      config,
+      waiting.request,
+      waiting.amountMicros,
+      async (reason, quote) => {
+        if (quote.terms.payTo !== waiting.payTo) {
+          throw new MarketError(
+            `the seller changed from ${waiting.payTo} to ${quote.terms.payTo}; ask buy_inference for a new price`
+          );
+        }
+        // The approval is spent here, for what the person approved, before any key is used.
+        await world.consume(
+          hold.approvalId,
+          hold.secret,
+          waiting.amountMicros,
+          waiting.payTo
+        );
+        return await approvedKey(config, reason);
+      },
+      sign
+    );
+  };
+
   server.registerTool(
     "list_models",
     {
@@ -275,6 +385,29 @@ export const registerTools = (server: McpServer, config: McpConfig): void => {
           ? null
           : usdcToMicros(input.max_price_usdc),
         async (reason, quote) => {
+          if (
+            needsPerson(config, BigInt(quote.terms.amount)) &&
+            world !== null
+          ) {
+            const { approval, secret } = await world.create({
+              amountMicros: BigInt(quote.terms.amount),
+              description: confirmMessage(quote, request),
+              network: quote.terms.network,
+              payTo: quote.terms.payTo,
+              payer: config.account,
+            });
+            throw new PaymentHeldError(
+              held.hold(request, quote, {
+                expiresAt: approval.expiresAt,
+                hold: {
+                  approvalId: approval.id,
+                  link: approval.link,
+                  secret,
+                  userCode: approval.userCode,
+                },
+              })
+            );
+          }
           if (needsPerson(config, BigInt(quote.terms.amount))) {
             const answer = await askPerson(confirmMessage(quote, request));
             if (answer === "declined") {
@@ -288,7 +421,8 @@ export const registerTools = (server: McpServer, config: McpConfig): void => {
             }
           }
           return await approvedKey(config, reason);
-        }
+        },
+        sign
       );
     }
   );
@@ -303,7 +437,7 @@ export const registerTools = (server: McpServer, config: McpConfig): void => {
         readOnlyHint: false,
       },
       description:
-        "Pay a request that buy_inference held because it costs more than this agent may pay on its own. Only call it with the payment_id, amount_usdc and pay_to that buy_inference returned. The person confirms the payment in the approval dialog before it runs, and the price may not have gone up since.",
+        "Pay a request that buy_inference held because it costs more than this agent may pay on its own. Only call it with the payment_id, amount_usdc and pay_to that buy_inference returned. The person confirms the payment first: in the approval dialog, or on World ID's page when buy_inference gave a World ID link (then this waits for their answer and pays only if World ID confirms it). The price may not have gone up since.",
       inputSchema: {
         amount_usdc: z
           .string()
@@ -320,11 +454,16 @@ export const registerTools = (server: McpServer, config: McpConfig): void => {
       title: "Approve a payment",
     },
     async (input) => {
-      const taken = held.take(
-        input.payment_id,
-        usdcToMicros(input.amount_usdc),
-        input.pay_to
-      );
+      const amountMicros = usdcToMicros(input.amount_usdc);
+      const waiting = held.peek(input.payment_id, amountMicros, input.pay_to);
+      if (
+        typeof waiting !== "string" &&
+        waiting.world !== null &&
+        world !== null
+      ) {
+        return await payWithWorld(waiting);
+      }
+      const taken = held.take(input.payment_id, amountMicros, input.pay_to);
       if (typeof taken === "string") {
         return failure(`Not paid: ${taken}.`);
       }
@@ -339,8 +478,46 @@ export const registerTools = (server: McpServer, config: McpConfig): void => {
             );
           }
           return await approvedKey(config, reason);
-        }
+        },
+        sign
       );
+    }
+  );
+
+  server.registerTool(
+    "cancel_payment",
+    {
+      annotations: {
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+        readOnlyHint: false,
+      },
+      description:
+        "Cancel a payment that buy_inference held for the person's approval. Nothing is paid, and its World ID approval can no longer be used, even if the person approves it afterwards.",
+      inputSchema: {
+        payment_id: z
+          .string()
+          .describe("The id buy_inference returned (pay_...)"),
+      },
+      title: "Cancel a held payment",
+    },
+    async (input) => {
+      const waiting = held.find(input.payment_id);
+      if (waiting === undefined) {
+        return failure(`No payment ${input.payment_id} is waiting.`);
+      }
+      held.release(waiting.id);
+      if (waiting.world !== null && world !== null) {
+        try {
+          await world.cancel(waiting.world.approvalId, waiting.world.secret);
+        } catch (error) {
+          return failure(
+            `Payment ${waiting.id} is no longer held here, so it will not be paid, but the API did not confirm cancelling its World ID approval: ${explain(error)}`
+          );
+        }
+      }
+      return text(`Cancelled payment ${waiting.id}. Nothing was paid.`);
     }
   );
 
