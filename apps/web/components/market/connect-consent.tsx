@@ -3,9 +3,9 @@
 import { useState } from "react";
 
 import { useToast } from "@/components/app-shell/toast";
-import { approveConnection, denyConnection } from "@/lib/api/actions";
+import { approveConnection } from "@/lib/api/actions";
 
-/** Approve or deny a connector; either way the browser goes back to the client. */
+/** Approves a connector, then sends the browser back to the client. To decline, close the tab. */
 export const ConnectConsent = ({
   clientName,
   grantId,
@@ -16,12 +16,10 @@ export const ConnectConsent = ({
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   /** Set once answered: the page stays on this state while the browser leaves. */
-  const [done, setDone] = useState<"approved" | "denied" | null>(null);
-  const answer = async (approve: boolean) => {
+  const [done, setDone] = useState(false);
+  const approve = async () => {
     setBusy(true);
-    const result = approve
-      ? await approveConnection(grantId)
-      : await denyConnection(grantId);
+    const result = await approveConnection(grantId);
     if (!result.ok) {
       setBusy(false);
       toast({
@@ -31,44 +29,30 @@ export const ConnectConsent = ({
       });
       return;
     }
-    setDone(approve ? "approved" : "denied");
+    setDone(true);
     window.location.assign(result.data.redirectUrl);
   };
-  if (done !== null) {
+  if (done) {
     return (
       <p
-        className="bg-foam text-carbon text-body inline-flex min-h-12 items-center gap-2 self-start px-6 tracking-wider"
+        className="bg-foam text-carbon text-body inline-flex min-h-12 items-center gap-2 px-6 tracking-wider"
         role="status"
       >
         <span aria-hidden="true">✓</span>
-        {done === "approved"
-          ? `CONNECTED · RETURNING TO ${clientName.toUpperCase()}…`
-          : `DENIED · RETURNING TO ${clientName.toUpperCase()}…`}
+        CONNECTED · RETURNING TO {clientName.toUpperCase()}…
       </p>
     );
   }
   return (
-    <div className="flex flex-wrap gap-3">
-      <button
-        className="bg-amber text-carbon text-body disabled:bg-dark disabled:text-clay min-h-12 px-6 tracking-wider"
-        disabled={busy}
-        onClick={() => {
-          void answer(true);
-        }}
-        type="button"
-      >
-        {busy ? "CONNECTING…" : `CONNECT ${clientName.toUpperCase()}`}
-      </button>
-      <button
-        className="border-dark text-body text-cement disabled:text-clay min-h-12 border px-6"
-        disabled={busy}
-        onClick={() => {
-          void answer(false);
-        }}
-        type="button"
-      >
-        DENY
-      </button>
-    </div>
+    <button
+      className="bg-amber text-carbon text-body disabled:bg-dark disabled:text-clay min-h-12 px-6 tracking-wider"
+      disabled={busy}
+      onClick={() => {
+        void approve();
+      }}
+      type="button"
+    >
+      {busy ? "CONNECTING…" : `CONNECT ${clientName.toUpperCase()}`}
+    </button>
   );
 };

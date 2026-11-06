@@ -22,6 +22,8 @@
   --color-black: #141414;
   --color-amber: #ffa133;
   --color-pumpkin: #e47b1a;
+  /* Claude's brand orange, only for the Claude mark on the connect page. */
+  --color-claude: #d97757;
   --color-flux: #c8be50;
   --color-foam: #bccabb;
   /* node status dots: online / offline */
