@@ -115,7 +115,7 @@ export const AvailableNow = async () => {
             <span>{plural(models.size, "model")}</span>
             <span aria-hidden="true">·</span>
             <span className="text-amber">
-              LIVE <LocalTime format="clock" value={asOf} />
+              UPDATED <LocalTime format="clock" value={asOf} />
             </span>
           </p>
         </div>

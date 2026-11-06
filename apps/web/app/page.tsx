@@ -16,8 +16,11 @@ import { DuskDither } from "@/components/shaders/shader-slots";
 import { ConnectWallet } from "@/components/wallet/connect-wallet";
 import { cx } from "@/lib/cx";
 
-/** Sellers come and go; the "available now" table is at most this many seconds old. */
-export const revalidate = 30;
+/**
+ * The "available now" table is rebuilt at most once per this many seconds, and only when
+ * someone visits, so it costs at most one market API call per window.
+ */
+export const revalidate = 300;
 
 const STEPS = [
   {
