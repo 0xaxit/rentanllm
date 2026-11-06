@@ -35,6 +35,11 @@ const PROBE_AMOUNT = 1n;
 const BOARD_CACHE_MS = 30_000;
 /** A slow Arkiv RPC must not hold up /v1/models; it falls back to the database. */
 const BOARD_READ_TIMEOUT = Duration.seconds(5);
+/**
+ * After a restart, nodes take a few seconds to reconnect through the tunnel; syncing
+ * before then would publish every seller as offline until the next sync.
+ */
+const FIRST_SYNC_DELAY = Duration.seconds(30);
 
 /** The offers on the public Arkiv board, as the gateway's own writer published them. */
 export interface ArkivBoard {
@@ -117,7 +122,8 @@ const makeMirror = (arkiv: ArkivSettings, resourceUrl: string) =>
     );
     yield* Effect.forkScoped(
       sync.pipe(
-        Effect.repeat(Schedule.spaced(Duration.millis(arkiv.syncIntervalMs)))
+        Effect.repeat(Schedule.spaced(Duration.millis(arkiv.syncIntervalMs))),
+        Effect.delay(FIRST_SYNC_DELAY)
       )
     );
     const address = writerAddress(key);

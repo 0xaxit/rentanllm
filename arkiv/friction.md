@@ -40,6 +40,6 @@ Notes from building on SDK 1.0.0 and the Rabdi testnet.
 ## 7. Our own bug, for the record
 
 - **What happened:** the first sync after a gateway restart published the seller's offer as offline, because it ran before the seller's node had reconnected through the tunnel. The next sync, 3 minutes later, set it back to online.
-- **Fix to make:** skip the first sync until nodes have had one heartbeat interval to reconnect.
+- **Fixed:** the first sync now waits 30 seconds after a restart, so nodes have reconnected before the gateway publishes their state.
 
 No Arkiv write failed in the gateway logs during the paid test runs on 6 and 7 Nov 2026.
