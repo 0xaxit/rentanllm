@@ -134,6 +134,7 @@ describe.runIf(integrationEnabled)("market store on Postgres", () => {
     );
     expect(offers).toEqual([
       {
+        kind: "chat",
         listingId: ids.liveListing,
         maxConcurrency: 3,
         models: [MODEL, "qwen2.5:7b"],

@@ -8,6 +8,7 @@ export const MODEL = "llama3.1:8b";
 export const marketOffers = () => [
   {
     agent: null,
+    kind: "chat",
     listingId: LISTING_ID,
     maxConcurrency: 2,
     models: [MODEL],
