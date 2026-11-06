@@ -43,6 +43,7 @@ export const memoryApprovalStore = (rows: Map<string, ApprovalRow>) =>
             id: input.id ?? randomUUID(),
             network: input.network,
             nextPollAt: input.nextPollAt,
+            ownerUserId: input.ownerUserId ?? null,
             payTo: input.payTo,
             payer: input.payer,
             pollIntervalSeconds: input.pollIntervalSeconds,
@@ -56,6 +57,20 @@ export const memoryApprovalStore = (rows: Map<string, ApprovalRow>) =>
           };
           rows.set(row.id, row);
           return row;
+        }),
+      pinnedSubject: (ownerUserId) =>
+        Effect.sync(() => {
+          const used = [...rows.values()]
+            .filter(
+              (row) =>
+                row.ownerUserId === ownerUserId &&
+                row.status === "used" &&
+                row.worldSubject !== null
+            )
+            .toSorted(
+              (a, b) => (a.usedAt?.getTime() ?? 0) - (b.usedAt?.getTime() ?? 0)
+            );
+          return used[0]?.worldSubject ?? null;
         }),
       transition: (id, fromStatus, patch) =>
         Effect.sync(() => {

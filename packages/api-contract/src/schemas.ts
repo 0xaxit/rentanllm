@@ -488,6 +488,11 @@ export const BuyerPolicySchema = Schema.Struct({
   paused: Schema.Boolean,
   /** Most paid to any one seller in any rolling 24 hours (USDC micros). */
   perSellerDailyUsdc: Schema.NullOr(PositiveMicrosSchema),
+  /**
+   * Above this price (USDC micros), the hosted connector asks the person to approve the
+   * payment with World ID first. Null: never ask.
+   */
+  worldApprovalAboveUsdc: Schema.NullOr(PositiveMicrosSchema),
 });
 export type BuyerPolicy = typeof BuyerPolicySchema.Type;
 
@@ -499,6 +504,10 @@ export const UpdateBuyerPolicyRequestSchema = Schema.Struct({
   maxPerRequestUsdc: Schema.NullOr(PositiveMicrosSchema),
   paused: Schema.Boolean,
   perSellerDailyUsdc: Schema.NullOr(PositiveMicrosSchema),
+  /** Left out: keep the saved value. */
+  worldApprovalAboveUsdc: Schema.optionalKey(
+    Schema.NullOr(PositiveMicrosSchema)
+  ),
 });
 
 export const BuyerSellerSpendSchema = Schema.Struct({

@@ -49,11 +49,13 @@ const LimitField = ({
   hint,
   label,
   onChange,
+  placeholder = "no limit",
   value,
 }: {
   hint: string;
   label: string;
   onChange: (value: string) => void;
+  placeholder?: string;
   value: string;
 }) => {
   const id = useId();
@@ -82,7 +84,7 @@ const LimitField = ({
           onChange={(event) =>
             onChange(sanitizePriceInput(event.currentTarget.value))
           }
-          placeholder="no limit"
+          placeholder={placeholder}
           spellCheck={false}
           type="text"
           value={value}
@@ -121,6 +123,9 @@ export const LimitsForm = ({ policy }: { policy: BuyerPolicy | null }) => {
   const [perSeller, setPerSeller] = useState(() =>
     limitInput(policy?.perSellerDailyUsdc ?? null)
   );
+  const [worldAbove, setWorldAbove] = useState(() =>
+    limitInput(policy?.worldApprovalAboveUsdc ?? null)
+  );
   const [sellers, setSellers] = useState(() =>
     (policy?.allowedSellers ?? []).join("\n")
   );
@@ -132,6 +137,7 @@ export const LimitsForm = ({ policy }: { policy: BuyerPolicy | null }) => {
     perRequest: parseLimit(perRequest),
     perSeller: parseLimit(perSeller),
     sellers: parseSellers(sellers),
+    worldAbove: parseLimit(worldAbove),
   };
   const valid = Object.values(parsed).every((field) => field.ok);
 
@@ -143,6 +149,7 @@ export const LimitsForm = ({ policy }: { policy: BuyerPolicy | null }) => {
       maxPerRequestUsdc: parsed.perRequest.value,
       paused: mode === "paused",
       perSellerDailyUsdc: parsed.perSeller.value,
+      worldApprovalAboveUsdc: parsed.worldAbove.value,
     });
     setSaving(false);
     if (!result.ok) {
@@ -203,6 +210,13 @@ export const LimitsForm = ({ policy }: { policy: BuyerPolicy | null }) => {
           label="PER SELLER, 24 HOURS"
           onChange={setPerSeller}
           value={perSeller}
+        />
+        <LimitField
+          hint="above this, Claude shows a World ID link and pays only after you approve"
+          label="WORLD ID ABOVE"
+          onChange={setWorldAbove}
+          placeholder="never ask"
+          value={worldAbove}
         />
       </div>
       <div className="flex flex-col gap-1.5">

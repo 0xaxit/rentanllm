@@ -22,6 +22,7 @@ import { ApiConfig } from "../config";
 import type { AgentWalletChain } from "../hedera/agent-wallets";
 import { HederaMirror } from "../hedera/mirror";
 import { arkivBoardReader } from "../mcp/arkiv-board";
+import { hostedWorld } from "../mcp/hosted-world";
 import { buildMcpServer } from "../mcp/server";
 import { agentWalletSigner } from "../services/agent-wallet";
 import type { OAuthFailure } from "../services/oauth";
@@ -31,13 +32,21 @@ import {
   startAuthorization,
   userForAccessToken,
 } from "../services/oauth";
+import type { ApprovalStore } from "../world/approval-store";
+import type { WorldIdpService } from "../world/world-idp-service";
 import { brandRoutes, LOGO_PATH, LOGO_SIZE } from "./brand";
 
 const RECENT_PAYMENTS = 10;
 const BEARER = /^Bearer\s+(?<token>\S+)$/iu;
 const NO_STORE = { "cache-control": "no-store" };
 
-type Services = ApiConfig | Db | HederaMirror | AgentWalletChain;
+type Services =
+  | ApiConfig
+  | Db
+  | HederaMirror
+  | AgentWalletChain
+  | ApprovalStore
+  | WorldIdpService;
 
 const jsonResponse = (
   body: unknown,
@@ -166,6 +175,7 @@ const mcp = Effect.gen(function* mcpGen() {
     );
   }
   const run = runner(yield* Effect.context<Services>());
+  const world = yield* hostedWorld(userId);
   const server = buildMcpServer({
     arkivOffers: arkivBoard,
     balance: (accountId) =>
@@ -197,6 +207,7 @@ const mcp = Effect.gen(function* mcpGen() {
       ),
     signer: () => run(agentWalletSigner(userId)),
     walletPage: `${config.webOrigins[0] ?? config.publicUrl}/market?use=mcp`,
+    world,
   });
   // Stateless: no session id option at all, every POST stands alone.
   const transport = new WebStandardStreamableHTTPServerTransport({

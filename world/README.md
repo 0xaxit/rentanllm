@@ -43,6 +43,18 @@ agent (MCP)            MCP server                 RentAnLLM API                W
 
 4. **Protected action.** The MCP server re-quotes, and the price may not have gone up. The API then _consumes_ the approval for exactly the approved amount and payee, in one conditional update. Only after that does the server read the payer key and sign the Hedera transfer.
 
+## In the hosted Claude connector
+
+The same approval works in the hosted **RentAnLLM** connector (`https://api.rentanllm.xyz/mcp`), which pays from the user's agent wallet:
+
+1. **Set the limit:** on the Budget page, set **WORLD ID ABOVE** (in USDC). Empty means never ask.
+2. **Request:** when `buy_inference` or `generate_image` would pay more than that, it holds the payment and returns World ID's link and code. Nothing is signed.
+3. **User completion:** the person approves on World ID's page.
+4. **Validated result and protected action:** Claude calls the same tool again with the `world_approval_id` it was given. The API waits for World's answer, validates the ID token and uses the approval once, for exactly that amount and seller. Only then does it sign the payment from the agent wallet.
+5. **Cancel:** `cancel_payment` drops a held payment.
+
+The approval belongs to the signed-in user (`world_approvals.owner_user_id`), so the connector never shows Claude a secret. The first person to approve is pinned to the user, as in the local server. The code is in `apps/api/src/mcp/world-gate.ts` and `apps/api/src/mcp/hosted-world.ts`.
+
 ## When it does not happen
 
 Every path except `approved → used` ends with nothing signed.
