@@ -30,6 +30,7 @@ import {
   startAuthorization,
   userForAccessToken,
 } from "../services/oauth";
+import { brandRoutes, LOGO_PATH, LOGO_SIZE } from "./brand";
 
 const RECENT_PAYMENTS = 10;
 const BEARER = /^Bearer\s+(?<token>\S+)$/iu;
@@ -59,6 +60,7 @@ const metadataRoutes = Effect.gen(function* metadataRoutesGen() {
   const resource = {
     authorization_servers: [issuer],
     bearer_methods_supported: ["header"],
+    logo_uri: `${issuer}${LOGO_PATH}`,
     resource: `${issuer}/mcp`,
     resource_name: "RentAnLLM",
     scopes_supported: ["market"],
@@ -169,6 +171,7 @@ const mcp = Effect.gen(function* mcpGen() {
         )
       ),
     gatewayUrl: config.gatewayUrl,
+    icon: { sizes: [LOGO_SIZE], src: `${config.publicUrl}${LOGO_PATH}` },
     recent: (accountId) =>
       run(
         Effect.gen(function* recentGen() {
@@ -216,6 +219,7 @@ export const McpRoutes = Layer.unwrap(
     ) => Effect.provide(effect, services);
     return HttpRouter.addAll([
       ...metadata,
+      ...brandRoutes,
       HttpRouter.route("POST", "/oauth/register", withServices(register)),
       HttpRouter.route("GET", "/oauth/authorize", withServices(authorize)),
       HttpRouter.route("POST", "/oauth/token", withServices(token)),

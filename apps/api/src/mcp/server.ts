@@ -26,6 +26,8 @@ export interface McpContext {
   /** The user's agent wallet balance in micro-USDC, or null when unknown. */
   readonly balance: (accountId: string) => Promise<bigint | null>;
   readonly gatewayUrl: string;
+  /** The RentAnLLM logo, on the server's own origin. */
+  readonly icon: { readonly sizes: readonly string[]; readonly src: string };
   /** The user's recent paid requests from the agent wallet, newest first. */
   readonly recent: (accountId: string) => Promise<
     readonly {
@@ -91,9 +93,20 @@ const explain = (error: unknown) =>
     ? error.message
     : `unexpected failure: ${String(error)}`;
 
+const WEBSITE = "https://rentanllm.vercel.app";
+
 export const buildMcpServer = (ctx: McpContext): McpServer => {
+  const icons = [
+    { mimeType: "image/png", sizes: [...ctx.icon.sizes], src: ctx.icon.src },
+  ];
   const server = new McpServer(
-    { name: "rentanllm", title: "RentAnLLM", version: "1.0.0" },
+    {
+      icons,
+      name: "rentanllm",
+      title: "RentAnLLM",
+      version: "1.0.0",
+      websiteUrl: WEBSITE,
+    },
     {
       instructions:
         "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models, then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. agent_wallet shows the balance and recent payments.",
