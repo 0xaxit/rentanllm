@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AppHeader } from "@/components/app-header";
 import { TabBar } from "@/components/app-shell/tab-bar";
 import { AppProviders } from "@/components/wallet/app-providers";
+import { SignInButton } from "@/components/wallet/sign-in-button";
 import { MARKET_TABS } from "@/lib/tabs";
 
 export const metadata: Metadata = {
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 
 const MarketLayout = ({ children }: { children: ReactNode }) => (
   <AppProviders>
-    <AppHeader section="MARKET" tabs={MARKET_TABS} trailing={null} />
+    <AppHeader section="MARKET" tabs={MARKET_TABS} trailing={<SignInButton />} />
     {children}
     <TabBar label="Market" tabs={MARKET_TABS} />
   </AppProviders>
