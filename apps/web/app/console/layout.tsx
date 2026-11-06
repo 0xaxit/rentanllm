@@ -15,11 +15,7 @@ export const metadata: Metadata = {
 
 const OwnerLayout = ({ children }: { children: ReactNode }) => (
   <AppProviders>
-    <AppHeader
-      section="OWNER CONSOLE"
-      tabs={OWNER_TABS}
-      trailing={<SignInButton />}
-    />
+    <AppHeader role="sell" tabs={OWNER_TABS} trailing={<SignInButton />} />
     {children}
     <TabBar label="Owner console" tabs={OWNER_TABS} />
   </AppProviders>

@@ -15,6 +15,7 @@ import {
 import { DuskDither } from "@/components/shaders/shader-slots";
 import { ConnectWallet } from "@/components/wallet/connect-wallet";
 import { cx } from "@/lib/cx";
+import { ROLES } from "@/lib/tabs";
 
 /**
  * The "available now" table is rebuilt at most once per this many seconds, and only when
@@ -43,11 +44,10 @@ const STEPS = [
   },
 ] as const;
 
-const NAV_LINKS = [
-  { className: "bg-foam", href: "/market", label: "Market" },
-  { className: undefined, href: "/agents", label: "Agents" },
-  { className: undefined, href: "/console", label: "Sell inference" },
-] as const;
+const NAV_LINKS = ROLES.map((role) => ({
+  href: role.href,
+  label: `${role.label} inference`,
+}));
 
 const LandingNav = () => (
   <header className="bg-enamel text-soot pt-safe flex flex-wrap items-center justify-between gap-6 px-4 sm:px-11 md:pt-11">
@@ -62,7 +62,7 @@ const LandingNav = () => (
       className="hidden flex-wrap items-center gap-x-8.25 gap-y-3 md:flex"
     >
       {NAV_LINKS.map((link) => (
-        <NavLink className={link.className} href={link.href} key={link.href}>
+        <NavLink href={link.href} key={link.href}>
           {link.label}
         </NavLink>
       ))}

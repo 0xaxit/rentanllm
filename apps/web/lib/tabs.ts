@@ -31,3 +31,19 @@ export const MARKET_TABS: readonly Tab[] = [
   { href: "/market", icon: "browse", label: "Market", matches: ["/connect"] },
   { href: "/budget", icon: "wallet", label: "Budget" },
 ];
+
+export type Role = "buy" | "sell";
+
+export interface RoleLink {
+  readonly role: Role;
+  readonly href: string;
+  readonly label: string;
+  /** What this side of the market is, in a few words. */
+  readonly hint: string;
+}
+
+/** The two sides of the market; every header shows both so a person always knows which side they are on. */
+export const ROLES: readonly RoleLink[] = [
+  { hint: "pay per request", href: "/market", label: "Buy", role: "buy" },
+  { hint: "earn from your machine", href: "/console", label: "Sell", role: "sell" },
+];

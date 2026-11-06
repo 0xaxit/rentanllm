@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 const MarketLayout = ({ children }: { children: ReactNode }) => (
   <AppProviders>
-    <AppHeader section="MARKET" tabs={MARKET_TABS} trailing={<SignInButton />} />
+    <AppHeader role="buy" tabs={MARKET_TABS} trailing={<SignInButton />} />
     {children}
     <TabBar label="Market" tabs={MARKET_TABS} />
   </AppProviders>

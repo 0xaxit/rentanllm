@@ -5,18 +5,22 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { isTabActive } from "@/lib/tabs";
-import type { Tab } from "@/lib/tabs";
+import type { Role, Tab } from "@/lib/tabs";
 
 import { Logotype, NavLink } from "./primitives";
+import { RoleSwitch } from "./role-switch";
 import { SoundToggle } from "./sound/sound-toggle";
 
-/** Light enamel header used above the dark app screens (md and up). */
+/**
+ * Light enamel header used above the dark app screens (md and up): the Buy |
+ * Sell switch, then only the tabs for the side the page belongs to.
+ */
 export const AppHeader = ({
-  section,
+  role,
   tabs,
   trailing,
 }: {
-  section: string;
+  role: Role;
   tabs: readonly Tab[];
   trailing: ReactNode;
 }) => {
@@ -28,10 +32,10 @@ export const AppHeader = ({
           <Link aria-label="RentAnLLM home" className="spring" href="/">
             <Logotype />
           </Link>
-          <span className="text-title text-clay leading-5.5">/ {section}</span>
+          <RoleSwitch current={role} />
         </div>
         <nav
-          aria-label="Primary"
+          aria-label={role === "buy" ? "Buyer" : "Seller"}
           className="flex flex-wrap items-center gap-x-8.25 gap-y-3"
         >
           {tabs.map((tab) => (
