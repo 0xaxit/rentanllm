@@ -8,6 +8,7 @@
  *   rentanllm-mcp store-key       read the payer's private key from stdin into the keychain
  *   rentanllm-mcp key-status      say whether a key is stored
  *   rentanllm-mcp agent "<prompt>" autonomous buyer: find a model, pay inside the caps, print the answer
+ *   rentanllm-mcp sign-payment <h> sign the 402's PAYMENT-REQUIRED header, print PAYMENT-SIGNATURE (curl tests)
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -19,6 +20,7 @@ import { runAgent } from "./agent.ts";
 import { ConfigError, keychainAccount, loadConfig } from "./config.ts";
 import type { McpConfig } from "./config.ts";
 import { MarketError } from "./market.ts";
+import { runSignPayment } from "./sign-command.ts";
 import { registerTools } from "./tools.ts";
 
 const VERSION = "0.0.1";
@@ -35,6 +37,10 @@ const main = async () => {
   const [command, ...rest] = process.argv.slice(2);
   if (command === "agent") {
     await runAgent(config, rest);
+    return;
+  }
+  if (command === "sign-payment") {
+    await runSignPayment(config, rest);
     return;
   }
   if (command === "store-key") {

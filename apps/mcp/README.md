@@ -77,6 +77,30 @@ bun src/main.ts agent --max-tokens 64 "Say hi in five words"
 
 Payments go into the same `spend.jsonl` as the MCP server's, so both count against one 24-hour cap.
 
+## Testing the gateway with curl
+
+`sign-payment` signs one 402 by hand, so the whole x402 exchange can be done with curl:
+
+```sh
+# 1. Ask without paying: the 402 carries a payment-required header
+curl -i https://gw.31-97-230-118.sslip.io/v1/chat/completions \
+  -H "content-type: application/json" \
+  -d '{"model":"llama3.1:8b","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
+
+# 2. Sign it (paste the header value; the whole "payment-required: ..." line works too)
+RENTANLLM_MCP_ACCOUNT=0.0.12345 RENTANLLM_MCP_APPROVAL=none \
+RENTANLLM_MCP_KEY_FILE=~/.config/rentanllm/wallets/buyer.json \
+bun src/main.ts sign-payment 'eyJhY2NlcHRz...'
+
+# 3. Send the same request again with the signature
+curl -i https://gw.31-97-230-118.sslip.io/v1/chat/completions \
+  -H "content-type: application/json" \
+  -H "payment-signature: <output of step 2>" \
+  -d '{"model":"llama3.1:8b","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
+```
+
+The answer comes back with a `payment-response` header: base64 JSON with the Hedera transaction id. `sign-payment` refuses anything above the per-request cap. With approval `touchid` it asks for Touch ID before signing.
+
 ## How the key is protected
 
 `signer/main.swift` builds `rentanllm-signer`, a small macOS helper:
