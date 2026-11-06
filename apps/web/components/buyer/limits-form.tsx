@@ -62,7 +62,7 @@ const LimitField = ({
   const invalid = !parseLimit(value).ok;
   return (
     <div className="flex min-w-44 grow basis-0 flex-col gap-1.5">
-      <label className="text-label text-clay leading-2.75" htmlFor={id}>
+      <label className="text-label text-cement leading-2.75" htmlFor={id}>
         {label}
       </label>
       <div
@@ -78,7 +78,7 @@ const LimitField = ({
           aria-describedby={`${id}-hint`}
           aria-invalid={invalid}
           autoComplete="off"
-          className="text-title text-enamel placeholder:text-clay w-full min-w-0 bg-transparent leading-6.5 outline-none"
+          className="text-title text-enamel placeholder:text-ash w-full min-w-0 bg-transparent leading-6.5 outline-none"
           id={id}
           inputMode="decimal"
           onChange={(event) =>
@@ -89,12 +89,12 @@ const LimitField = ({
           type="text"
           value={value}
         />
-        <span className="text-label text-clay shrink-0 leading-2.75">USDC</span>
+        <span className="text-label text-ash shrink-0 leading-2.75">USDC</span>
       </div>
       <p
         className={cx(
           "text-label leading-3.75",
-          invalid ? "text-pumpkin" : "text-clay"
+          invalid ? "text-pumpkin" : "text-ash"
         )}
         id={`${id}-hint`}
       >
@@ -221,7 +221,7 @@ export const LimitsForm = ({ policy }: { policy: BuyerPolicy | null }) => {
       </div>
       <div className="flex flex-col gap-1.5">
         <label
-          className="text-label text-clay leading-2.75"
+          className="text-label text-cement leading-2.75"
           htmlFor={sellersId}
         >
           ONLY PAY THESE SELLERS
@@ -230,7 +230,7 @@ export const LimitsForm = ({ policy }: { policy: BuyerPolicy | null }) => {
           aria-describedby={`${sellersId}-hint`}
           aria-invalid={!parsed.sellers.ok}
           className={cx(
-            "bg-soot text-body text-enamel placeholder:text-clay focus:border-amber min-h-24 border p-2.5 outline-none",
+            "bg-soot text-body text-enamel placeholder:text-ash focus:border-amber min-h-24 border p-2.5 outline-none",
             parsed.sellers.ok ? "border-dark" : "border-pumpkin"
           )}
           id={sellersId}
@@ -242,7 +242,7 @@ export const LimitsForm = ({ policy }: { policy: BuyerPolicy | null }) => {
         <p
           className={cx(
             "text-label leading-3.75",
-            parsed.sellers.ok ? "text-clay" : "text-pumpkin"
+            parsed.sellers.ok ? "text-ash" : "text-pumpkin"
           )}
           id={`${sellersId}-hint`}
         >
