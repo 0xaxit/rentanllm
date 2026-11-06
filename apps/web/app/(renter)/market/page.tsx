@@ -95,6 +95,14 @@ const initialMode = (raw: string | string[] | undefined): UseMode =>
 /** "signed-out", or the buyer's agent wallet (null before it exists). */
 type WalletState = AgentWallet | null | "signed-out";
 
+/** A numbered step: the number in amber, the label in the main text colour. */
+const StepHeading = ({ label, step }: { label: string; step: number }) => (
+  <h3 className="text-body tracking-label text-enamel flex gap-2 pl-1 leading-5.75">
+    <span className="text-amber">{step}</span>
+    <span>{label}</span>
+  </h3>
+);
+
 const McpPanel = ({ wallet }: { wallet: WalletState }) => (
   <div className="flex flex-col gap-5">
     <Callout rule="amber">
@@ -105,7 +113,8 @@ const McpPanel = ({ wallet }: { wallet: WalletState }) => (
         wallet, and no API key to copy.
       </p>
     </Callout>
-    <GroupedList title="1 · SIGN IN AND FUND YOUR AGENT WALLET">
+    <StepHeading label="SIGN IN AND FUND YOUR AGENT WALLET" step={1} />
+    <GroupedList className="-mt-3">
       {wallet === "signed-out" ? (
         <li className="flex flex-col items-start gap-3 p-4">
           <p className="text-body text-cement">
@@ -119,11 +128,9 @@ const McpPanel = ({ wallet }: { wallet: WalletState }) => (
         </li>
       )}
     </GroupedList>
-    <Callout rule="mud">
+    <StepHeading label="ADD THE CONNECTOR IN CLAUDE DESKTOP" step={2} />
+    <Callout className="-mt-3" rule="mud">
       <div className="flex flex-col gap-3">
-        <p className="text-label tracking-label text-mud">
-          2 · ADD THE CONNECTOR IN CLAUDE DESKTOP
-        </p>
         <p className="text-body text-cement leading-5.75">
           Settings → Connectors → Add custom connector. Name it RentAnLLM and
           paste this URL:
@@ -144,9 +151,10 @@ const McpPanel = ({ wallet }: { wallet: WalletState }) => (
         </p>
       </div>
     </Callout>
+    <StepHeading label="ASK CLAUDE" step={3} />
     <GroupedList
+      className="-mt-3"
       footer="Claude asks before every buy_inference · your Budget limits are checked before each payment settles"
-      title="3 · ASK CLAUDE"
     >
       {TOOLS.map((tool) => (
         <GroupedRow
