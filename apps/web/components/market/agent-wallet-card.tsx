@@ -25,6 +25,8 @@ import {
 
 /** The mirror node shows a new balance a few seconds after consensus. */
 const MIRROR_LAG_MS = 6000;
+/** How long the button shows the success state after the balance refreshes. */
+const SENT_MS = 4000;
 
 const errorMessage = (cause: unknown): string => {
   if (cause instanceof Error) {
@@ -48,6 +50,8 @@ export const AgentWalletCard = ({ wallet }: { wallet: AgentWallet | null }) => {
   const { writeContractAsync } = useWriteContract();
   const [busy, setBusy] = useState<string | null>(null);
   const [amount, setAmount] = useState("1");
+  /** The amount just sent: the button shows a success state while it is set. */
+  const [sent, setSent] = useState<bigint | null>(null);
 
   if (wallet === null) {
     return (
@@ -118,9 +122,12 @@ export const AgentWalletCard = ({ wallet }: { wallet: AgentWallet | null }) => {
         detail: `${formatUsdExact(micros)} sent to ${wallet.accountId}`,
         title: "Agent wallet topped up",
       });
+      setBusy(null);
+      setSent(micros);
+      // Refresh once the mirror node has the new balance, then return to the form.
       setTimeout(() => {
-        setBusy(null);
         router.refresh();
+        setTimeout(() => setSent(null), SENT_MS);
       }, MIRROR_LAG_MS);
     } catch (error) {
       setBusy(null);
@@ -153,7 +160,7 @@ export const AgentWalletCard = ({ wallet }: { wallet: AgentWallet | null }) => {
         className="flex flex-wrap items-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          if (valid && busy === null) {
+          if (valid && busy === null && sent === null) {
             void fund();
           }
         }}
@@ -171,13 +178,23 @@ export const AgentWalletCard = ({ wallet }: { wallet: AgentWallet | null }) => {
             value={amount}
           />
         </label>
-        <button
-          className="bg-amber text-carbon text-body disabled:bg-dark disabled:text-clay min-h-12 px-6 tracking-wider"
-          disabled={!isConnected || !valid || busy !== null}
-          type="submit"
-        >
-          {busy ?? "SEND FROM MY WALLET"}
-        </button>
+        {sent === null ? (
+          <button
+            className="bg-amber text-carbon text-body disabled:bg-dark disabled:text-clay min-h-12 px-6 tracking-wider"
+            disabled={!isConnected || !valid || busy !== null}
+            type="submit"
+          >
+            {busy ?? "SEND FROM MY WALLET"}
+          </button>
+        ) : (
+          <p
+            className="bg-foam text-carbon text-body inline-flex min-h-12 items-center gap-2 px-6 tracking-wider"
+            role="status"
+          >
+            <span aria-hidden="true">✓</span>
+            SENT {formatUsdExact(sent)}
+          </p>
+        )}
       </form>
       <Note>
         a USDC transfer on Hedera testnet from your connected wallet · it pays
