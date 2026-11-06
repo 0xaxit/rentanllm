@@ -11,7 +11,7 @@
 - **Sellers:** run `ral start … --ollama-model llama3.1:8b`.
 - **Anyone:** read the market from Arkiv with `bun packages/arkiv/scripts/query.ts`.
 
-**After Mumbai:** TODO (team).
+**After Mumbai:** yes, we will keep building it. People want to use LLMs without handing over who they are, and RentAnLLM lets them: no account, no API key and no sign-up, just a wallet that pays per request. Arkiv keeps the market's offers and receipts public as it grows.
 
 **Numbers** (production, as of 7 Nov 2026):
 
