@@ -33,11 +33,11 @@ test("landing renders the hero", async ({ page }) => {
   );
 });
 
-test("market lists the offer and the latest paid request", async ({ page }) => {
+test("market lists the offer and how to use it", async ({ page }) => {
   await page.goto("/market");
   await expect(page.getByText(MODEL).first()).toBeVisible();
   await expect(page.getByText("1 of 1 seller online")).toBeVisible();
-  await expect(page.getByText("LATEST PAID REQUESTS")).toBeVisible();
+  await expect(page.getByText("CLAUDE DESKTOP · MCP")).toBeVisible();
 });
 
 test("signed-out console shows the sign-in panel", async ({ page }) => {
