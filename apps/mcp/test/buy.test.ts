@@ -225,12 +225,27 @@ describe("config", () => {
         RENTANLLM_MCP_APPROVAL: "none",
       })
     ).toThrow("RENTANLLM_MCP_PRIVATE_KEY");
-    const config = loadConfig({
-      RENTANLLM_GATEWAY_URL: "https://gw.example/v1/",
-      RENTANLLM_MCP_ACCOUNT: "0.0.1",
-    });
-    expect(config.approval).toBe("touchid");
-    expect(config.gatewayUrl).toBe("https://gw.example");
-    expect(config.insecureKey).toBeNull();
   });
+
+  it.runIf(process.platform === "darwin")(
+    "defaults to Touch ID on macOS, with no key in memory",
+    () => {
+      const config = loadConfig({
+        RENTANLLM_GATEWAY_URL: "https://gw.example/v1/",
+        RENTANLLM_MCP_ACCOUNT: "0.0.1",
+      });
+      expect(config.approval).toBe("touchid");
+      expect(config.gatewayUrl).toBe("https://gw.example");
+      expect(config.insecureKey).toBeNull();
+    }
+  );
+
+  it.runIf(process.platform !== "darwin")(
+    "refuses the Touch ID default off macOS",
+    () => {
+      expect(() => loadConfig({ RENTANLLM_MCP_ACCOUNT: "0.0.1" })).toThrow(
+        "Touch ID approval needs macOS"
+      );
+    }
+  );
 });
