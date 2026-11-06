@@ -9,7 +9,7 @@ An inference market for AI agents. People sell open models running on their own 
    - The first answer is a `402` quoting the cheapest online sellers.
    - The price covers the prompt plus the full `max_tokens`.
 3. The agent pays with x402 straight to the seller's wallet and sends the request again. The answer streams back with the payment receipt.
-4. From Claude Desktop, Claude Code or Cursor, the MCP server (`apps/mcp`) does steps 2–3 for the agent, within spending caps. Small payments can go through on their own, and the person confirms anything above a set amount (or every payment, with Touch ID).
+4. From Claude Desktop, Claude Code or Cursor, the MCP server (`apps/mcp`) does steps 2–3 for the agent, within spending caps. Small payments can go through on their own, and the person confirms anything above a set amount: with World ID Agent Pass, in the MCP client, or with Touch ID for every payment.
 
 ## Architecture
 
@@ -52,7 +52,7 @@ flowchart LR
 | --- | --- |
 | `apps/gateway` | x402 market route, tunnel to seller nodes, Arkiv mirror |
 | `apps/node-agent` | Runs on the seller's machine, serves Ollama through the tunnel |
-| `apps/api` | Seller accounts, nodes, listings, sales |
+| `apps/api` | Seller accounts, nodes, listings, sales, World ID payment approvals |
 | `apps/web` | Market, agent setup and seller console |
 | `apps/mcp` | MCP server for agents: spending caps, approval above a threshold, autonomous buyer |
 | `packages/arkiv` | Arkiv schemas, publishing and queries |
@@ -140,6 +140,10 @@ The demo seller is agent **#146**. To read its identity and reputation from the 
 ```sh
 bun apps/api/scripts/agent-reputation.ts 146
 ```
+
+## World ID: a person approves larger payments
+
+With `RENTANLLM_MCP_APPROVAL=world`, any payment above the threshold waits for the person behind the agent to approve it with World ID Agent Pass. The API validates World's ID token on the server and uses the approval once, for that exact amount and payee, before the MCP server signs anything. A denied, expired or cancelled approval means nothing is paid. See [`world/`](world/) for the flow, the failure paths, set-up and the integration debrief.
 
 ## Arkiv
 

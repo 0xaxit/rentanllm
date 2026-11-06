@@ -43,13 +43,13 @@ All optional; the app builds with none. See `.env.example`.
 
 Root Directory `apps/web` with "Include files outside the root directory" on; framework Next.js; install `bun install --frozen-lockfile`. No `vercel.json` is needed (crons live on the API project).
 
-| Variable | Value |
-| --- | --- |
-| `API_ORIGIN` | `https://api.rentanllm.xyz` (the API project) |
-| `NEXT_PUBLIC_GATEWAY_URL` | `https://gw.rentanllm.xyz` |
-| `NEXT_PUBLIC_SITE_URL` | `https://rentanllm.xyz` |
-| `NEXT_PUBLIC_FARO_URL` | `https://otel.rentanllm.xyz/collect` |
-| `NEXT_PUBLIC_FARO_APP_KEY` | `FARO_APP_KEY` from `deploy/hostinger/.env` |
+| Variable                   | Value                                         |
+| -------------------------- | --------------------------------------------- |
+| `API_ORIGIN`               | `https://api.rentanllm.xyz` (the API project) |
+| `NEXT_PUBLIC_GATEWAY_URL`  | `https://gw.rentanllm.xyz`                    |
+| `NEXT_PUBLIC_SITE_URL`     | `https://rentanllm.xyz`                       |
+| `NEXT_PUBLIC_FARO_URL`     | `https://otel.rentanllm.xyz/collect`          |
+| `NEXT_PUBLIC_FARO_APP_KEY` | `FARO_APP_KEY` from `deploy/hostinger/.env`   |
 
 The API project needs `SIWE_DOMAIN=rentanllm.xyz` and no `COOKIE_DOMAIN`. The full table for all three pieces (web, API, gateway) is in [deploy/hostinger/README.md](../../deploy/hostinger/README.md#2-dns). Changing `API_ORIGIN` needs a redeploy, since rewrites are compiled into the build.
 

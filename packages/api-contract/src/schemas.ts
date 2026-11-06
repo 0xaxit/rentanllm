@@ -509,3 +509,76 @@ export const BuyerOverviewSchema = Schema.Struct({
   spentLast24hUsdc: MicrosSchema,
 });
 export type BuyerOverview = typeof BuyerOverviewSchema.Type;
+
+// World ID approvals (human approval of one agent payment)
+
+const MAX_DESCRIPTION_LENGTH = 500;
+
+export const ApprovalStatusSchema = Schema.Literals([
+  "pending",
+  "approved",
+  "denied",
+  "expired",
+  "cancelled",
+  "failed",
+  "used",
+]);
+
+/** What the agent wants the person to approve: one payment, exactly. */
+export const CreateApprovalRequestSchema = Schema.Struct({
+  amountUsdc: MicrosSchema.check(Schema.isGreaterThanBigInt(0n)),
+  description: Schema.String.check(
+    Schema.isMinLength(1),
+    Schema.isMaxLength(MAX_DESCRIPTION_LENGTH)
+  ),
+  /** The World subject linked to this payer. World then refuses anyone else. */
+  expectedSubject: Schema.optionalKey(
+    Schema.String.check(Schema.isMinLength(1))
+  ),
+  /** CAIP-2 network, e.g. "hedera:testnet". */
+  network: Schema.String,
+  payTo: HederaAccountSchema,
+  payer: HederaAccountSchema,
+});
+
+export const ApprovalSchema = Schema.Struct({
+  amountUsdc: MicrosSchema,
+  createdAt: Schema.Date,
+  decidedAt: Schema.NullOr(Schema.Date),
+  description: Schema.String,
+  expiresAt: Schema.Date,
+  /** Why the approval failed validation or World failed, when status is "failed". */
+  failureReason: Schema.NullOr(Schema.String),
+  id: UuidSchema,
+  network: Schema.String,
+  payTo: Schema.String,
+  payer: Schema.String,
+  status: ApprovalStatusSchema,
+  usedAt: Schema.NullOr(Schema.Date),
+  /** The code the person sees on World's page. */
+  userCode: Schema.String,
+  /** Where the person approves or denies. */
+  verificationUri: Schema.String,
+  verificationUriComplete: Schema.NullOr(Schema.String),
+  /** World's subject for the person, once a validated approval exists. */
+  worldSubject: Schema.NullOr(Schema.String),
+});
+
+/** Returned once on create: `secret` is needed to check, use or cancel the approval. */
+export const CreateApprovalResponseSchema = Schema.Struct({
+  approval: ApprovalSchema,
+  secret: Schema.String,
+});
+
+export const ApprovalSecretRequestSchema = Schema.Struct({
+  secret: Schema.String.check(Schema.isMinLength(1)),
+});
+
+/** Uses an approved approval for the payment it names; must match it exactly. */
+export const ConsumeApprovalRequestSchema = Schema.Struct({
+  amountUsdc: MicrosSchema,
+  payTo: HederaAccountSchema,
+  secret: Schema.String.check(Schema.isMinLength(1)),
+});
+export type Approval = typeof ApprovalSchema.Type;
+export type ApprovalStatus = typeof ApprovalStatusSchema.Type;

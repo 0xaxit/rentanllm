@@ -40,9 +40,13 @@ Auth: the session cookie `rentanllm_session` (httpOnly, Secure, SameSite=Lax). B
 | POST | `/owner/listings/:listingId/pause` | cookie | Sets `status = paused` |
 | GET | `/owner/dashboard` | cookie | The owner's nodes and their provider accounts |
 | GET | `/owner/sales` | cookie | What the owner's listings sold: totals for the last 24 h and to date, and the latest 50 paid requests |
+| POST | `/approvals` | none | `{payer, payTo, amountUsdc, network, description[, expectedSubject]}`: starts a World ID Agent Pass approval of that one payment. Returns the approval (World's link and code) and its `secret` **once** |
+| POST | `/approvals/:id/check` | `{secret}` | Polls World (at most once per interval), validates the ID token, returns the approval's state |
+| POST | `/approvals/:id/consume` | `{secret, amountUsdc, payTo}` | Uses an `approved` approval once, for exactly that amount and payee (409 otherwise) |
+| POST | `/approvals/:id/cancel` | `{secret}` | Cancels a pending or approved approval; it can never be used afterwards |
 | GET | `/cron/tick` | `Bearer $CRON_SECRET` | Marks nodes offline whose last heartbeat is older than `NODE_STALE_SECONDS` |
 
-Errors are JSON `{"_tag": "...", "message": "..."}`: `Unauthorized` 401, `NotFound` 404, `Conflict` 409, `InvalidRequest` 422 (schema failures are 400).
+Errors are JSON `{"_tag": "...", "message": "..."}`: `Unauthorized` 401, `NotFound` 404, `Conflict` 409, `InvalidRequest` 422, `Unavailable` 503 (World ID not configured or not reachable). Schema failures are 400.
 
 ## Environment
 
@@ -58,6 +62,10 @@ Errors are JSON `{"_tag": "...", "message": "..."}`: `Unauthorized` 401, `NotFou
 | `SESSION_TTL_HOURS` |  | `168` | Session lifetime |
 | `SIWE_NONCE_TTL_SECONDS` |  | `600` | Nonce lifetime |
 | `NODE_STALE_SECONDS` |  | `90` | Heartbeat age after which a node is marked offline |
+| `WORLD_ID_CLIENT_ID` |  |  | World IdP client id. With the secret, turns on `/approvals` |
+| `WORLD_ID_CLIENT_SECRET` |  |  | World IdP client secret (`client_secret_post`). Only sent to World |
+| `WORLD_ID_ISSUER` |  | `https://sandbox.auth.world.org` | `https://auth.world.org` for production identities |
+| `WORLD_ID_ACCEPTED_ACR` |  | any | Comma-separated `acr` values to accept, e.g. `https://world.org/oidc/acr/orb` |
 | `HEDERA_RPC_URL` |  |  | Hedera testnet JSON-RPC (e.g. `https://testnet.hashio.io/api`); enables ERC-1271/6492 smart-wallet sign-in |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` |  | off | OTLP/HTTP base URL, e.g. `https://otel.rentanllm.xyz`; `/v1/traces` and `/v1/logs` are appended |
 | `OTEL_EXPORTER_OTLP_HEADERS` |  |  | `Authorization=Bearer%20<token>` (values URL-encoded: write the space as `%20`) |

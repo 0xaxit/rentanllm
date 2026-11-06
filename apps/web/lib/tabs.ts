@@ -45,5 +45,10 @@ export interface RoleLink {
 /** The two sides of the market; every header shows both so a person always knows which side they are on. */
 export const ROLES: readonly RoleLink[] = [
   { hint: "pay per request", href: "/market", label: "Buy", role: "buy" },
-  { hint: "earn from your machine", href: "/console", label: "Sell", role: "sell" },
+  {
+    hint: "earn from your machine",
+    href: "/console",
+    label: "Sell",
+    role: "sell",
+  },
 ];

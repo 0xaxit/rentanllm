@@ -69,8 +69,8 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
-      - name: Apply migrations
-        run: bun run --cwd packages/db db:migrate
+      - name: Sync the schema
+        run: bun run --cwd packages/db db:sync
       - run: bun run test
 
   web-build:

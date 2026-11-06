@@ -1,9 +1,12 @@
 export { RentAnLlmApi } from "./api";
 export { CurrentUser } from "./current-user";
+export { Conflict } from "./errors/conflict";
 export { InvalidRequest } from "./errors/invalid-request";
 export { NotFound } from "./errors/not-found";
 export { Unauthorized } from "./errors/unauthorized";
+export { Unavailable } from "./errors/unavailable";
 export { AgentsGroup } from "./groups/agents";
+export { ApprovalsGroup } from "./groups/approvals";
 export { AuthGroup } from "./groups/auth";
 export { BuyerGroup } from "./groups/buyer";
 export { CronGroup } from "./groups/cron";
@@ -23,6 +26,8 @@ export type {
   AgentWallet,
   BuyerOverview,
   BuyerPolicy,
+  Approval,
+  ApprovalStatus,
   Listing,
   MarketOffer,
   NodeIdentity,
@@ -44,6 +49,12 @@ export {
   NodeIdentitySchema,
   ReputationReportSchema,
   SellerReputationSchema,
+  ApprovalSchema,
+  ApprovalSecretRequestSchema,
+  ApprovalStatusSchema,
+  ConsumeApprovalRequestSchema,
+  CreateApprovalRequestSchema,
+  CreateApprovalResponseSchema,
   UNDETECTED_PLAN_TIER,
   AddressSchema,
   AuthKindSchema,

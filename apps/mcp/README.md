@@ -56,6 +56,28 @@ In Claude Desktop, allow `buy_inference` and leave `approve_payment` on **Always
 }
 ```
 
+## Approval with World ID Agent Pass
+
+`RENTANLLM_MCP_APPROVAL=world` works like `threshold`, but the person approves larger payments with World ID instead of in the client:
+
+1. `buy_inference` holds a payment above `RENTANLLM_MCP_AUTO_APPROVE_USDC` and returns World ID's link and code for the agent to show the person. Nothing is signed.
+2. The person approves or denies on World ID's page.
+3. `approve_payment` waits up to 45 seconds for their answer. The RentAnLLM API (`RENTANLLM_API_URL`) validates World's ID token and then uses the approval once, for exactly the held amount and payee. Only then is the payment signed.
+4. If the approval is denied, expires (10 minutes) or fails validation, or `cancel_payment` is called, nothing is paid.
+
+The first person to approve is pinned in `<state dir>/world-subject`; later approvals must come from the same person. Delete that file to link a different person. See [`world/`](../../world/) for the whole flow.
+
+```json
+"env": {
+  "RENTANLLM_API_URL": "https://api.rentanllm.xyz",
+  "RENTANLLM_GATEWAY_URL": "https://gw.rentanllm.xyz",
+  "RENTANLLM_MCP_ACCOUNT": "0.0.12345",
+  "RENTANLLM_MCP_APPROVAL": "world",
+  "RENTANLLM_MCP_AUTO_APPROVE_USDC": "0.001",
+  "RENTANLLM_MCP_KEY_FILE": "~/.config/rentanllm/wallets/buyer.json"
+}
+```
+
 ## Autonomous agent
 
 `rentanllm-mcp agent "<prompt>"` buys one answer with no person in the loop:
@@ -157,7 +179,8 @@ ChatGPT can only connect to MCP servers hosted on the internet, and a hosted ser
 | `RENTANLLM_MCP_MAX_PER_DAY_USDC` | `1` | Most paid in any 24 hours |
 | `RENTANLLM_MCP_STATE_DIR` | `~/.config/rentanllm/mcp` | Where `spend.jsonl` is kept |
 | `RENTANLLM_MCP_SIGNER` | `dist/rentanllm-signer` | The approval helper |
-| `RENTANLLM_MCP_APPROVAL` | `touchid` | `touchid`: Touch ID for every payment. `threshold`: the person approves only above `RENTANLLM_MCP_AUTO_APPROVE_USDC`. `none`: no person, the caps are the only limit (the `agent` command needs it). `threshold` and `none` also need `RENTANLLM_MCP_PRIVATE_KEY` or `RENTANLLM_MCP_KEY_FILE` |
+| `RENTANLLM_MCP_APPROVAL` | `touchid` | `touchid`: Touch ID for every payment. `threshold`: the person approves only above `RENTANLLM_MCP_AUTO_APPROVE_USDC`. `world`: the same, with World ID Agent Pass (needs `RENTANLLM_API_URL`). `none`: no person, the caps are the only limit (the `agent` command needs it). `threshold`, `world` and `none` also need `RENTANLLM_MCP_PRIVATE_KEY` or `RENTANLLM_MCP_KEY_FILE` |
+| `RENTANLLM_API_URL` |  | With approval `world`: the RentAnLLM API that validates World ID approvals |
 | `RENTANLLM_MCP_AUTO_APPROVE_USDC` | `0.001` | With approval `threshold`: the largest payment made without asking |
 | `RENTANLLM_MCP_KEY_FILE` |  | With approval `threshold` or `none`: a file holding the payer key, raw or as JSON with `privateKeyHex` |
 

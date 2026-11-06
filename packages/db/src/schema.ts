@@ -435,3 +435,64 @@ export const oauthTokens = pgTable(
   },
   (t) => [index("oauth_tokens_user_id_idx").on(t.userId)]
 );
+
+/**
+ * World ID approval states. `used` means the approval released exactly one payment; the
+ * other end states never release one.
+ */
+export const worldApprovalStatus = pgEnum("world_approval_status", [
+  "pending",
+  "approved",
+  "denied",
+  "expired",
+  "cancelled",
+  "failed",
+  "used",
+]);
+
+/**
+ * One person-approval of one agent payment, through World ID Agent Pass (World IdP, OIDC
+ * device authorization). World cannot bind the amount or payee to its token, so the exact
+ * payment is stored here and the approval releases only that payment, once.
+ */
+export const worldApprovals = pgTable(
+  "world_approvals",
+  {
+    acr: text("acr"),
+    amountMicros: micros("amount_micros").notNull(),
+    amr: jsonb("amr").$type<readonly string[]>(),
+    /** When World says the person authenticated (the ID token's auth_time). */
+    authTime: timestamptz("auth_time"),
+    createdAt: createdAt(),
+    decidedAt: timestamptz("decided_at"),
+    /** What the agent is paying for, shown back to the agent and in logs. */
+    description: text("description").notNull(),
+    /** World's private device code, needed to poll. Cleared once the approval is decided. */
+    deviceCode: text("device_code"),
+    /** When set, World must authenticate this subject (the person linked to the payer). */
+    expectedSubject: text("expected_subject"),
+    expiresAt: timestamptz("expires_at").notNull(),
+    failureReason: text("failure_reason"),
+    id: id(),
+    network: text("network").notNull(),
+    /** No poll of World's token endpoint before this (its interval, plus slow_down). */
+    nextPollAt: timestamptz("next_poll_at").notNull(),
+    payTo: text("pay_to").notNull(),
+    /** The paying account (Hedera 0.0.x). */
+    payer: text("payer").notNull(),
+    pollIntervalSeconds: integer("poll_interval_seconds").notNull(),
+    /** SHA-256 hex of the secret handed to the agent; only it can check or use this approval. */
+    secretHash: text("secret_hash").notNull(),
+    status: worldApprovalStatus("status").notNull().default("pending"),
+    usedAt: timestamptz("used_at"),
+    userCode: text("user_code").notNull(),
+    verificationUri: text("verification_uri").notNull(),
+    verificationUriComplete: text("verification_uri_complete"),
+    /** World's pairwise subject of the person who approved. */
+    worldSubject: text("world_subject"),
+  },
+  (t) => [
+    index("world_approvals_expires_at_idx").on(t.expiresAt),
+    check("world_approvals_amount_positive", sql`${t.amountMicros} > 0`),
+  ]
+);

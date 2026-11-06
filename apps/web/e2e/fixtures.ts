@@ -28,6 +28,7 @@ export const marketOffers = () => [
 
 export const paidRequests = () => [
   {
+    auditSequence: 7,
     createdAt: new Date(0).toISOString(),
     httpStatus: 200,
     inputTokens: 18,
