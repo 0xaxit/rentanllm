@@ -19,7 +19,7 @@ export const RoleSwitch = ({ current }: { current: Role | null }) => (
         <Link
           aria-current={active ? "page" : undefined}
           className={cx(
-            "spring text-body flex min-h-9 items-center gap-2 px-3 leading-5.25",
+            "spring text-body flex min-h-9 items-center px-3 leading-5.25",
             active ? "bg-carbon text-enamel" : "text-dark hover:bg-aluminum"
           )}
           data-cuelume-navigate=""
@@ -27,14 +27,6 @@ export const RoleSwitch = ({ current }: { current: Role | null }) => (
           key={role.role}
         >
           {role.label}
-          <span
-            className={cx(
-              "text-label hidden lg:inline",
-              active ? "text-ash" : "text-clay"
-            )}
-          >
-            {role.hint}
-          </span>
         </Link>
       );
     })}
