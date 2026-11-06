@@ -15,6 +15,8 @@ export const ConnectConsent = ({
 }) => {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  /** Set once answered: the page stays on this state while the browser leaves. */
+  const [done, setDone] = useState<"approved" | "denied" | null>(null);
   const answer = async (approve: boolean) => {
     setBusy(true);
     const result = approve
@@ -29,8 +31,22 @@ export const ConnectConsent = ({
       });
       return;
     }
+    setDone(approve ? "approved" : "denied");
     window.location.assign(result.data.redirectUrl);
   };
+  if (done !== null) {
+    return (
+      <p
+        className="bg-foam text-carbon text-body inline-flex min-h-12 items-center gap-2 self-start px-6 tracking-wider"
+        role="status"
+      >
+        <span aria-hidden="true">✓</span>
+        {done === "approved"
+          ? `CONNECTED · RETURNING TO ${clientName.toUpperCase()}…`
+          : `DENIED · RETURNING TO ${clientName.toUpperCase()}…`}
+      </p>
+    );
+  }
   return (
     <div className="flex flex-wrap gap-3">
       <button

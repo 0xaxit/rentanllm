@@ -42,6 +42,27 @@ const ConnectPage = async ({
     getOAuthGrant(grantId),
     getAgentWallet(),
   ]);
+  if (!grant.ok && grant.error.kind === "NotFound") {
+    // Already answered (often this very page, re-rendering on the way back to the
+    // client) or expired: not an error for the person.
+    return (
+      <AppMain>
+        <PageHeader kicker="MCP · CONNECT" title="Connect" />
+        <Callout rule="foam">
+          <div className="flex flex-col gap-2">
+            <p className="text-body text-enamel leading-5.75">
+              This connection request has been answered. If Claude shows
+              RentAnLLM as connected, you are done and can close this tab.
+            </p>
+            <p className="text-body text-cement leading-5.75">
+              Not connected? Requests expire after 10 minutes: press Connect
+              again in Claude&apos;s connector settings.
+            </p>
+          </div>
+        </Callout>
+      </AppMain>
+    );
+  }
   if (!grant.ok) {
     return (
       <AppMain>
