@@ -11,6 +11,8 @@ import { ApiConfig, makeTestConfig } from "../../src/config";
 import type { ApiConfigShape } from "../../src/config";
 import { hederaMirrorStub } from "../../src/hedera/mirror";
 import type { HederaMirror } from "../../src/hedera/mirror";
+import { erc8004Stub } from "../../src/reputation/erc8004";
+import type { Erc8004 } from "../../src/reputation/erc8004";
 import { makeWallet } from "./wallet";
 
 const SESSION_COOKIE_PATTERN = /rentanllm_session=(?<token>[^;]*)/u;
@@ -25,13 +27,16 @@ export const makeTestApp = (
   url: string,
   configOverrides: Partial<ApiConfigShape> = {},
   /** The Hedera mirror node; by default every wallet has an account that takes USDC. */
-  mirror: Layer.Layer<HederaMirror> = hederaMirrorStub()
+  mirror: Layer.Layer<HederaMirror> = hederaMirrorStub(),
+  /** The ERC-8004 registries; by default no agent exists on chain. */
+  erc8004: Layer.Layer<Erc8004> = erc8004Stub(new Map())
 ) => {
   const config = makeTestConfig(configOverrides);
   const services = Layer.mergeAll(
     AuthStorePg,
     SignatureVerifierEoa,
-    mirror
+    mirror,
+    erc8004
   ).pipe(
     Layer.provideMerge(dbLayer({ maxConnections: 4, url: Redacted.make(url) })),
     Layer.provideMerge(Layer.succeed(ApiConfig)(config)),

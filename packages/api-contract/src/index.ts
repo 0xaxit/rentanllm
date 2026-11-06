@@ -3,6 +3,7 @@ export { CurrentUser } from "./current-user";
 export { InvalidRequest } from "./errors/invalid-request";
 export { NotFound } from "./errors/not-found";
 export { Unauthorized } from "./errors/unauthorized";
+export { AgentsGroup } from "./groups/agents";
 export { AuthGroup } from "./groups/auth";
 export { BuyerGroup } from "./groups/buyer";
 export { CronGroup } from "./groups/cron";
@@ -17,18 +18,27 @@ export {
 } from "./middleware/authentication";
 export { CronAuth } from "./middleware/cron-auth";
 export type {
+  AgentIdentity,
   BuyerOverview,
   BuyerPolicy,
   Listing,
   MarketOffer,
+  NodeIdentity,
   OwnerSales,
   PaidRequest,
   Node,
+  SellerReputation,
   ProviderAccount,
   User,
 } from "./schemas";
 export {
   AddProviderAccountRequestSchema,
+  AgentIdentitySchema,
+  AgentRegistrationFileSchema,
+  LinkNodeIdentityRequestSchema,
+  NodeIdentitySchema,
+  ReputationReportSchema,
+  SellerReputationSchema,
   UNDETECTED_PLAN_TIER,
   AddressSchema,
   AuthKindSchema,

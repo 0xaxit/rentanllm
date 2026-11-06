@@ -8,10 +8,14 @@ describe("RentAnLlmApi", () => {
 
   it("documents every route", () => {
     expect(Object.keys(spec.paths).toSorted()).toEqual([
+      "/agents/{nodeId}/registration.json",
       "/auth/logout",
       "/auth/me",
       "/auth/nonce",
       "/auth/verify",
+      "/buyer/overview",
+      "/buyer/policy",
+      "/cron/reputation",
       "/cron/tick",
       "/health",
       "/market/offers",
@@ -22,6 +26,7 @@ describe("RentAnLlmApi", () => {
       "/owner/listings/{listingId}/pause",
       "/owner/nodes",
       "/owner/nodes/{nodeId}/accounts",
+      "/owner/nodes/{nodeId}/identity",
       "/owner/nodes/{nodeId}/token",
       "/owner/nodes/{nodeId}/uptime",
       "/owner/sales",

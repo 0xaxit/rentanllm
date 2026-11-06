@@ -266,10 +266,95 @@ export const PriceSuggestionSchema = Schema.Struct({
   verdict: Schema.NullOr(PriceVerdictSchema),
 });
 
+// Agent identity and reputation (ERC-8004 on Hedera testnet, HCS-14 UAIDs)
+
+/** A seller node's service over the last 24 hours, measured by the platform. */
+export const SellerReputationSchema = Schema.Struct({
+  /** Paid requests that finished in the last 24 hours. */
+  requests24h: Schema.Int,
+  /** Share of those requests that finished ok, 0-100; null with no requests. */
+  successPct: Schema.NullOr(Schema.Number),
+  /** Median time to first byte from the node, in ms; null with no requests. */
+  ttfbMs: Schema.NullOr(Schema.Int),
+  /** Share of the last 24 hours the node was connected, 0-100; null before it ever connected. */
+  uptimePct: Schema.NullOr(Schema.Number),
+});
+export type SellerReputation = typeof SellerReputationSchema.Type;
+
+/** A node registered as an ERC-8004 agent. */
+export const AgentIdentitySchema = Schema.Struct({
+  /** The Identity Registry token id, as a decimal string. */
+  agentId: Schema.String,
+  /** The monitor's last giveFeedback transaction hash. */
+  lastFeedbackTx: Schema.NullOr(Schema.String),
+  lastReportedAt: Schema.NullOr(Schema.Date),
+  ownerWallet: Schema.String,
+  /** "eip155:296:0x8004A818…" */
+  registry: Schema.String,
+  /** HCS-14 Universal Agent ID. */
+  uaid: Schema.String,
+});
+export type AgentIdentity = typeof AgentIdentitySchema.Type;
+
+/** What the seller console needs to register a node as an agent. */
+export const NodeIdentitySchema = Schema.Struct({
+  agent: Schema.NullOr(AgentIdentitySchema),
+  /** The ERC-8004 Identity Registry (an EVM address on Hedera testnet). */
+  identityRegistry: Schema.String,
+  /** The address whose feedback the reputation reads count. */
+  monitorAddress: Schema.NullOr(Schema.String),
+  /** The agentURI to pass to `register`. */
+  registrationUrl: Schema.String,
+  reputationRegistry: Schema.String,
+});
+export type NodeIdentity = typeof NodeIdentitySchema.Type;
+
+export const LinkNodeIdentityRequestSchema = Schema.Struct({
+  /** The agentId from the `Registered` event, as a decimal string. */
+  agentId: Schema.String,
+});
+
+/** An ERC-8004 registration file (EIP-8004 `registration-v1`). */
+export const AgentRegistrationFileSchema = Schema.Struct({
+  active: Schema.Boolean,
+  description: Schema.String,
+  image: Schema.String,
+  name: Schema.String,
+  registrations: Schema.Array(
+    Schema.Struct({ agentId: Schema.Number, agentRegistry: Schema.String })
+  ),
+  services: Schema.Array(
+    Schema.Struct({
+      endpoint: Schema.String,
+      name: Schema.String,
+      version: Schema.optional(Schema.String),
+    })
+  ),
+  supportedTrust: Schema.Array(Schema.String),
+  type: Schema.String,
+  uaid: Schema.optional(Schema.String),
+  x402Support: Schema.Boolean,
+});
+
+/** One cron run of the reputation monitor. */
+export const ReputationReportSchema = Schema.Struct({
+  /** Agents whose reputation was posted this run. */
+  reported: Schema.Array(
+    Schema.Struct({
+      agentId: Schema.String,
+      transactions: Schema.Array(Schema.String),
+    })
+  ),
+  /** Why nothing was posted, when nothing could be (e.g. no monitor key). */
+  skipped: Schema.NullOr(Schema.String),
+});
+
 // Market
 
 /** A live listing sold pay-per-request on the gateway's market route. */
 export const MarketOfferSchema = Schema.Struct({
+  /** The node's ERC-8004 agent; null when the seller has not registered it. */
+  agent: Schema.NullOr(AgentIdentitySchema),
   listingId: UuidSchema,
   maxConcurrency: Schema.Int,
   models: Schema.Array(Schema.String),
@@ -278,6 +363,7 @@ export const MarketOfferSchema = Schema.Struct({
   priceInPerMtokUsdc: MicrosSchema,
   priceOutPerMtokUsdc: MicrosSchema,
   provider: ProviderSchema,
+  reputation: SellerReputationSchema,
   /** The wallet buyers pay (the owner's sign-in address). */
   sellerWallet: Schema.String,
 });

@@ -84,20 +84,14 @@ export const listNodes = Effect.fn("owner.listNodes")(function* listNodesGen(
   return rows.map(toNode);
 }, dieOnDbError);
 
-export const nodeUptime = Effect.fn("owner.nodeUptime")(function* nodeUptimeGen(
-  ownerId: string,
-  nodeId: string,
+/** A node's uptime from its tunnel sessions (the last 7 days and its first session). */
+export const uptimeOf = Effect.fn("owner.uptimeOf")(function* uptimeOfGen(
+  node: typeof nodes.$inferSelect,
   now: Date,
   staleMs: number
 ) {
   const db = yield* Db;
-  const [node] = yield* db
-    .select()
-    .from(nodes)
-    .where(and(eq(nodes.id, nodeId), eq(nodes.ownerId, ownerId)));
-  if (node === undefined) {
-    return yield* new NotFound({ message: "Node not found" });
-  }
+  const nodeId = node.id;
   const weekAgo = new Date(now.getTime() - WEEK_MS);
   const sessions = yield* db
     .select({
@@ -128,6 +122,23 @@ export const nodeUptime = Effect.fn("owner.nodeUptime")(function* nodeUptimeGen(
     sessions,
     staleMs,
   });
+}, dieOnDbError);
+
+export const nodeUptime = Effect.fn("owner.nodeUptime")(function* nodeUptimeGen(
+  ownerId: string,
+  nodeId: string,
+  now: Date,
+  staleMs: number
+) {
+  const db = yield* Db;
+  const [node] = yield* db
+    .select()
+    .from(nodes)
+    .where(and(eq(nodes.id, nodeId), eq(nodes.ownerId, ownerId)));
+  if (node === undefined) {
+    return yield* new NotFound({ message: "Node not found" });
+  }
+  return yield* uptimeOf(node, now, staleMs);
 }, dieOnDbError);
 
 export const addProviderAccount = Effect.fn("owner.addProviderAccount")(

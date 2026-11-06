@@ -6,6 +6,7 @@ import type {
 } from "@rentanllm/api-contract";
 import { Db } from "@rentanllm/db";
 import {
+  agentIdentities,
   listings,
   nodes,
   paidRequests,
@@ -25,7 +26,10 @@ import {
 } from "drizzle-orm";
 import { Effect } from "effect";
 
+import { ApiConfig } from "../config";
 import { dieOnDbError } from "../db-errors";
+import { nodeReputation } from "../reputation/metrics";
+import { toAgentIdentity } from "./agents";
 
 const HOUR_MS = 3_600_000;
 
@@ -35,8 +39,10 @@ const HOUR_MS = 3_600_000;
  */
 export const marketOffers = Effect.fn("market.offers")(function* offersGen() {
   const db = yield* Db;
+  const config = yield* ApiConfig;
   const rows = yield* db
     .select({
+      identity: agentIdentities,
       listing: listings,
       nodeId: nodes.id,
       nodeStatus: nodes.status,
@@ -50,6 +56,7 @@ export const marketOffers = Effect.fn("market.offers")(function* offersGen() {
     )
     .innerJoin(nodes, eq(nodes.id, providerAccounts.nodeId))
     .innerJoin(users, eq(users.id, nodes.ownerId))
+    .leftJoin(agentIdentities, eq(agentIdentities.nodeId, nodes.id))
     .where(
       and(
         eq(listings.status, "live"),
@@ -60,12 +67,18 @@ export const marketOffers = Effect.fn("market.offers")(function* offersGen() {
       )
     )
     .orderBy(asc(listings.priceOutPerMtokUsdc), asc(listings.id));
+  const reputation = yield* nodeReputation(
+    [...new Set(rows.map((row) => row.nodeId))],
+    new Date(),
+    config.nodeStaleMs
+  );
   return rows.flatMap(
-    ({ listing, nodeId, nodeStatus, provider, sellerWallet }) =>
+    ({ identity, listing, nodeId, nodeStatus, provider, sellerWallet }) =>
       sellerWallet === null
         ? []
         : [
             {
+              agent: identity === null ? null : toAgentIdentity(identity),
               listingId: listing.id,
               maxConcurrency: listing.maxConcurrency,
               models: listing.models,
@@ -74,6 +87,12 @@ export const marketOffers = Effect.fn("market.offers")(function* offersGen() {
               priceInPerMtokUsdc: listing.priceInPerMtokUsdc,
               priceOutPerMtokUsdc: listing.priceOutPerMtokUsdc,
               provider,
+              reputation: reputation.get(nodeId) ?? {
+                requests24h: 0,
+                successPct: null,
+                ttfbMs: null,
+                uptimePct: null,
+              },
               sellerWallet,
             } satisfies MarketOffer,
           ]

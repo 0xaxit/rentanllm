@@ -7,6 +7,10 @@
     {
       "path": "/cron/tick",
       "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/cron/reputation",
+      "schedule": "15 0 * * *"
     }
   ]
 }

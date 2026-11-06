@@ -7,7 +7,9 @@ import { Authentication } from "../middleware/authentication";
 import {
   AddProviderAccountRequestSchema,
   CreateListingRequestSchema,
+  LinkNodeIdentityRequestSchema,
   ListingSchema,
+  NodeIdentitySchema,
   NodeSchema,
   NodeUptimeSchema,
   OwnerDashboardSchema,
@@ -45,6 +47,22 @@ export class OwnerGroup extends HttpApiGroup.make("owner")
       error: NotFound,
       params: { nodeId: UuidSchema },
       success: NodeUptimeSchema,
+    }),
+    /** The node's ERC-8004 agent, and what to pass to `register` when it has none. */
+    HttpApiEndpoint.get("nodeIdentity", "/nodes/:nodeId/identity", {
+      error: NotFound,
+      params: { nodeId: UuidSchema },
+      success: NodeIdentitySchema,
+    }),
+    /**
+     * Links the agent the owner registered on chain. The API checks that the owner's wallet
+     * holds the agent NFT and that its agentURI is this node's registration file.
+     */
+    HttpApiEndpoint.put("linkNodeIdentity", "/nodes/:nodeId/identity", {
+      error: [NotFound, InvalidRequest],
+      params: { nodeId: UuidSchema },
+      payload: LinkNodeIdentityRequestSchema,
+      success: NodeIdentitySchema,
     }),
     HttpApiEndpoint.post("addProviderAccount", "/nodes/:nodeId/accounts", {
       error: [NotFound, InvalidRequest],

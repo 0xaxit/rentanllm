@@ -4,9 +4,13 @@ export interface ApiConfigShape {
   /** Domain attribute for the session cookie, e.g. ".rentanllm.xyz" with a custom domain. Unset (current rentanllm.vercel.app setup): host-only. */
   readonly cookieDomain: string | undefined;
   readonly cronSecret: Redacted.Redacted;
+  /** The gateway's public origin, the endpoint agents' registration files point buyers to. */
+  readonly gatewayUrl: string;
   /** A node whose last heartbeat is older than this is marked offline. */
   readonly nodeStaleMs: number;
   readonly nonceTtlMs: number;
+  /** This API's public origin; agents' ERC-8004 agentURIs are served under it. */
+  readonly publicUrl: string;
   /** Key for HMAC-SHA256 of session tokens before they are stored. */
   readonly sessionSecret: Redacted.Redacted;
   readonly sessionTtlMs: number;
@@ -26,6 +30,14 @@ const DEFAULT_SESSION_TTL_HOURS = 168;
 const DEFAULT_NONCE_TTL_SECONDS = 600;
 const DEFAULT_NODE_STALE_SECONDS = 90;
 const MIN_SECRET_LENGTH = 32;
+const DEFAULT_PUBLIC_URL = "https://rentanllm-api.vercel.app";
+const DEFAULT_GATEWAY_URL = "https://gw.31-97-230-118.sslip.io";
+
+const publicOrigin = (name: string, fallback: string) =>
+  Config.String(name).pipe(
+    Config.withDefault(fallback),
+    Config.map((value) => value.replace(/\/+$/u, ""))
+  );
 
 const secret = (name: string) =>
   Config.Redacted(name).pipe(
@@ -51,8 +63,10 @@ export const apiConfigFromEnv = Config.all({
     Config.map(Option.getOrUndefined)
   ),
   cronSecret: secret("CRON_SECRET"),
+  gatewayUrl: publicOrigin("GATEWAY_PUBLIC_URL", DEFAULT_GATEWAY_URL),
   nodeStaleMs: seconds("NODE_STALE_SECONDS", DEFAULT_NODE_STALE_SECONDS),
   nonceTtlMs: seconds("SIWE_NONCE_TTL_SECONDS", DEFAULT_NONCE_TTL_SECONDS),
+  publicUrl: publicOrigin("API_PUBLIC_URL", DEFAULT_PUBLIC_URL),
   sessionSecret: secret("SESSION_SECRET"),
   sessionTtlMs: Config.Int("SESSION_TTL_HOURS").pipe(
     Config.withDefault(DEFAULT_SESSION_TTL_HOURS),
@@ -82,8 +96,10 @@ export const makeTestConfig = (
 ): ApiConfigShape => ({
   cookieDomain: undefined,
   cronSecret: Redacted.make("test-cron-secret-0123456789abcdef0123"),
+  gatewayUrl: "http://gateway.test",
   nodeStaleMs: DEFAULT_NODE_STALE_SECONDS * MS_PER_SECOND,
   nonceTtlMs: DEFAULT_NONCE_TTL_SECONDS * MS_PER_SECOND,
+  publicUrl: "http://api.test",
   sessionSecret: Redacted.make("test-session-secret-0123456789abcdef"),
   sessionTtlMs: DEFAULT_SESSION_TTL_HOURS * MS_PER_HOUR,
   siweDomain: "localhost:3000",

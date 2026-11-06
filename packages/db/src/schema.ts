@@ -338,3 +338,29 @@ export const buyerPolicies = pgTable(
     ),
   ]
 );
+
+/**
+ * A seller node registered as an ERC-8004 agent on Hedera testnet. The seller's wallet
+ * owns the agent NFT on the Identity Registry; the API serves its registration file,
+ * which carries the node's HCS-14 UAID. The platform's monitor wallet (never the owner:
+ * ERC-8004 forbids self-feedback) posts measured uptime, time to first byte and success
+ * rate to the Reputation Registry; `last_reported_at` paces those posts.
+ */
+export const agentIdentities = pgTable("agent_identities", {
+  /** The ERC-8004 agentId (the Identity Registry's token id). */
+  agentId: bigint("agent_id", { mode: "bigint" }).notNull().unique(),
+  createdAt: createdAt(),
+  /** The monitor's last giveFeedback transaction (an EVM hash). */
+  lastFeedbackTx: text("last_feedback_tx"),
+  /** When the monitor last posted this agent's reputation on chain. */
+  lastReportedAt: timestamptz("last_reported_at"),
+  nodeId: uuid("node_id")
+    .primaryKey()
+    .references(() => nodes.id, { onDelete: "cascade" }),
+  /** The wallet that owns the agent NFT (the seller's sign-in wallet). */
+  ownerWallet: text("owner_wallet").notNull(),
+  /** CAIP-10 style registry, e.g. "eip155:296:0x8004A818BFB912233c491871b3d84c89A494BD9e". */
+  registry: text("registry").notNull(),
+  /** The HCS-14 Universal Agent ID in the registration file. */
+  uaid: text("uaid").notNull(),
+});
