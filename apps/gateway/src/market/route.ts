@@ -215,6 +215,11 @@ const recordPaid = (
   Effect.fn("recordPaidRequest")(
     function* recordPaidRequest(finished: Finished) {
       const { offer, requirements } = quote;
+      // Image servers name no model in their answer, so images keep the model paid for.
+      const model =
+        body.kind === "image"
+          ? body.model
+          : (finished.usage?.model ?? body.model);
       const used = costOf(
         offer.prices,
         finished.usage,
@@ -228,7 +233,7 @@ const recordPaid = (
         latencyMs: finished.totalLatencyMs,
         listingId: offer.listingId,
         maxTokens: body.maxTokens,
-        model: finished.usage?.model ?? body.model,
+        model,
         network: requirements.network,
         nodeId: offer.nodeId,
         ownerId: offer.ownerId,
@@ -249,7 +254,7 @@ const recordPaid = (
           at: finished.finishedAt,
           inputTokens: finished.usage?.inputTokens ?? 0,
           listing: offer.listingId,
-          model: finished.usage?.model ?? body.model,
+          model,
           network: requirements.network,
           outputTokens: finished.usage?.outputTokens ?? 0,
           paid: quote.amountMicros,
@@ -263,7 +268,7 @@ const recordPaid = (
           asset: requirements.asset,
           at: finished.finishedAt,
           maxTokens: body.maxTokens,
-          model: finished.usage?.model ?? body.model,
+          model,
           network: requirements.network,
           payTo: requirements.payTo,
           payer: settled.payer,
@@ -294,120 +299,122 @@ const handleMarket = <E, R>(
   ) => Effect.Effect<PricedRequest, E, R>
 ) =>
   Effect.gen(function* handleMarketRequest() {
-  const request = yield* HttpServerRequest.HttpServerRequest;
-  const settings = yield* Settings;
-  const { market } = settings;
-  if (market === null) {
-    return yield* new NotFound({
-      message: "The pay-per-request market is not enabled on this gateway.",
-    });
-  }
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const settings = yield* Settings;
+    const { market } = settings;
+    if (market === null) {
+      return yield* new NotFound({
+        message: "The pay-per-request market is not enabled on this gateway.",
+      });
+    }
 
-  const raw = yield* readBody(request);
-  if (Buffer.byteLength(raw, "utf-8") > settings.maxBodyBytes) {
-    return yield* new InvalidRequest({ message: "Request body is too large." });
-  }
-  const body = yield* parse(raw, market);
-  const quotes = yield* quotesFor(market, body);
+    const raw = yield* readBody(request);
+    if (Buffer.byteLength(raw, "utf-8") > settings.maxBodyBytes) {
+      return yield* new InvalidRequest({
+        message: "Request body is too large.",
+      });
+    }
+    const body = yield* parse(raw, market);
+    const quotes = yield* quotesFor(market, body);
 
-  const header = extractPaymentHeader(request.headers);
-  if (header === null) {
-    return yield* paymentDue(market, body, quotes, body.dueMessage);
-  }
-  const refuse = (reason: string) =>
-    paymentDue(market, body, quotes, `Payment not accepted: ${reason}.`);
-  const payload = yield* decodePaymentHeader(header).pipe(
-    Effect.catchTag("PaymentRejected", (rejected) =>
-      Effect.fail(refuse(rejected.reason))
-    )
-  );
-  const quote = matchQuote(payload, quotes);
-  if (typeof quote === "string") {
-    return yield* refuse(quote);
-  }
-  const { offer } = quote;
-
-  // Hold the seller's slot before taking the money, so a busy seller costs nothing.
-  const acquired = yield* (yield* RateLimiter).acquireSlot(
-    `listing:${offer.listingId}`,
-    offer.maxConcurrency
-  );
-  if (!acquired) {
-    return yield* new RateLimited({
-      message: `The seller is serving its limit of ${offer.maxConcurrency} requests at once. Retry shortly; nothing was charged.`,
-      resetAt: null,
-      retryAfterMs: null,
-    });
-  }
-
-  const store = yield* MarketStore;
-  const checkBuyer = (payer: string | null) =>
-    Effect.gen(function* checkBuyerPolicy() {
-      if (payer === null) {
-        return;
-      }
-      const policy = yield* store.buyerPolicy(payer);
-      if (policy === null) {
-        return;
-      }
-      const since = new Date(Date.now() - BUYER_WINDOW_MS);
-      const { payTo } = quote.requirements;
-      const spend = yield* store.buyerSpend(payer, payTo, since);
-      const refusal = policyRefusal(policy, spend, payTo, quote.amountMicros);
-      if (refusal !== null) {
-        return yield* new PaymentRejected({ reason: refusal });
-      }
-    });
-  const settled = yield* settleAgainst(
-    payload,
-    quote.requirements,
-    checkBuyer
-  ).pipe(
-    Effect.catchTag("PaymentRejected", (rejected) =>
-      Effect.fail(refuse(rejected.reason))
-    )
-  );
-  const requestId = `req_${randomUUID().replaceAll("-", "")}`;
-  yield* Effect.annotateCurrentSpan({
-    listingId: offer.listingId,
-    requestId,
-    tx: settled.transaction,
-  });
-
-  const receipt = {
-    "payment-response": encodePaymentResponseHeader(settled.settle),
-    "x-rentanllm-listing": offer.listingId,
-    "x-rentanllm-paid-usdc": formatUsdc(quote.amountMicros),
-    "x-rentanllm-request-id": requestId,
-  };
-  return yield* proxyToNode({
-    body: body.forwardBody,
-    bookingId: offer.listingId,
-    headers: forwardableRequestHeaders(request.headers),
-    nodeId: offer.nodeId,
-    path: body.path,
-    provider: offer.provider,
-    record: recordPaid(
-      store,
-      yield* ArkivMirror,
-      yield* SpendAudit,
-      quote,
-      body,
-      settled,
-      requestId
-    ),
-    requestId,
-    responseHeaders: receipt,
-    stream: body.stream,
-  }).pipe(
-    // The payment has settled: a node failure still carries its receipt, so the buyer
-    // knows it paid and can count it.
-    Effect.catchTag("UpstreamFailed", (failure) =>
-      Effect.succeed(
-        HttpServerResponse.setHeaders(toErrorResponse(failure), receipt)
+    const header = extractPaymentHeader(request.headers);
+    if (header === null) {
+      return yield* paymentDue(market, body, quotes, body.dueMessage);
+    }
+    const refuse = (reason: string) =>
+      paymentDue(market, body, quotes, `Payment not accepted: ${reason}.`);
+    const payload = yield* decodePaymentHeader(header).pipe(
+      Effect.catchTag("PaymentRejected", (rejected) =>
+        Effect.fail(refuse(rejected.reason))
       )
-    )
-  );
+    );
+    const quote = matchQuote(payload, quotes);
+    if (typeof quote === "string") {
+      return yield* refuse(quote);
+    }
+    const { offer } = quote;
+
+    // Hold the seller's slot before taking the money, so a busy seller costs nothing.
+    const acquired = yield* (yield* RateLimiter).acquireSlot(
+      `listing:${offer.listingId}`,
+      offer.maxConcurrency
+    );
+    if (!acquired) {
+      return yield* new RateLimited({
+        message: `The seller is serving its limit of ${offer.maxConcurrency} requests at once. Retry shortly; nothing was charged.`,
+        resetAt: null,
+        retryAfterMs: null,
+      });
+    }
+
+    const store = yield* MarketStore;
+    const checkBuyer = (payer: string | null) =>
+      Effect.gen(function* checkBuyerPolicy() {
+        if (payer === null) {
+          return;
+        }
+        const policy = yield* store.buyerPolicy(payer);
+        if (policy === null) {
+          return;
+        }
+        const since = new Date(Date.now() - BUYER_WINDOW_MS);
+        const { payTo } = quote.requirements;
+        const spend = yield* store.buyerSpend(payer, payTo, since);
+        const refusal = policyRefusal(policy, spend, payTo, quote.amountMicros);
+        if (refusal !== null) {
+          return yield* new PaymentRejected({ reason: refusal });
+        }
+      });
+    const settled = yield* settleAgainst(
+      payload,
+      quote.requirements,
+      checkBuyer
+    ).pipe(
+      Effect.catchTag("PaymentRejected", (rejected) =>
+        Effect.fail(refuse(rejected.reason))
+      )
+    );
+    const requestId = `req_${randomUUID().replaceAll("-", "")}`;
+    yield* Effect.annotateCurrentSpan({
+      listingId: offer.listingId,
+      requestId,
+      tx: settled.transaction,
+    });
+
+    const receipt = {
+      "payment-response": encodePaymentResponseHeader(settled.settle),
+      "x-rentanllm-listing": offer.listingId,
+      "x-rentanllm-paid-usdc": formatUsdc(quote.amountMicros),
+      "x-rentanllm-request-id": requestId,
+    };
+    return yield* proxyToNode({
+      body: body.forwardBody,
+      bookingId: offer.listingId,
+      headers: forwardableRequestHeaders(request.headers),
+      nodeId: offer.nodeId,
+      path: body.path,
+      provider: offer.provider,
+      record: recordPaid(
+        store,
+        yield* ArkivMirror,
+        yield* SpendAudit,
+        quote,
+        body,
+        settled,
+        requestId
+      ),
+      requestId,
+      responseHeaders: receipt,
+      stream: body.stream,
+    }).pipe(
+      // The payment has settled: a node failure still carries its receipt, so the buyer
+      // knows it paid and can count it.
+      Effect.catchTag("UpstreamFailed", (failure) =>
+        Effect.succeed(
+          HttpServerResponse.setHeaders(toErrorResponse(failure), receipt)
+        )
+      )
+    );
   });
 
 export const handleChatCompletions = handleMarket((raw, market) =>

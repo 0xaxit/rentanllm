@@ -46,6 +46,14 @@ flowchart LR
   api -- "posts seller reputation" --> hedera
 ```
 
+## Image models
+
+Sellers can also sell images. The demo node runs FLUX.2 [klein] 4B (Apache 2.0) on an RTX 3090 through [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp)'s `sd-server`, next to Ollama.
+
+- **Buy:** `POST /v1/images/generations` on the gateway (OpenAI's images shape: `model`, `prompt`, `n` 1–4, `size` 512, 768 or 1024 px). It answers 402 with the price, like chat, and returns base64 PNG once paid. From Claude Desktop, use the `generate_image` tool.
+- **Price:** one flat USDC price per image. An image is billed as one million output tokens, so receipts, budgets, Sales and Arkiv work as they do for chat.
+- **Sell:** start the node with `--image-url http://127.0.0.1:1234` (the local image server), then list the model in the console as **Image** with a price per image.
+
 ## Layout
 
 | Path | What |
@@ -147,7 +155,7 @@ With `RENTANLLM_MCP_APPROVAL=world`, any payment above the threshold waits for t
 
 ## Arkiv
 
-The gateway writes the live offers and one receipt per paid request to Arkiv's Rabdi testnet. Claude Desktop's `list_models` reads the offers back from Arkiv, not from our database. See [`arkiv/`](arkiv/) for the schema and how each part is used.
+The gateway writes the live offers and one receipt per paid request to Arkiv's Rabdi testnet. The homepage, the Market page, the gateway's `GET /v1/models` and Claude Desktop's `list_models` read the offers back from Arkiv, not from our database. See [`arkiv/`](arkiv/) for the schema and how each part is used.
 
 - **Writer wallet:** `0x7A67B250ECa8Ed822B8439b331f8Eff22c1C20F8`
 - **Query to run** (no account or key needed):

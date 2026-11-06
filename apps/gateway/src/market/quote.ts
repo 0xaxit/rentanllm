@@ -135,7 +135,8 @@ export interface ImageBody {
 }
 
 const isImageSize = (value: unknown): value is (typeof IMAGE_SIZES)[number] =>
-  typeof value === "string" && (IMAGE_SIZES as readonly string[]).includes(value);
+  typeof value === "string" &&
+  (IMAGE_SIZES as readonly string[]).includes(value);
 
 /** Reads an OpenAI images/generations body: model, prompt, n (1-4) and size. */
 export const parseImageBody = (raw: string, _limits: ChatLimits) =>

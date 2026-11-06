@@ -62,3 +62,29 @@ export const getArkivBoard = async (): Promise<ArkivRead> => {
     };
   }
 };
+
+export type ArkivOffersRead =
+  | { readonly kind: "off" }
+  | { readonly kind: "error"; readonly message: string }
+  | {
+      readonly kind: "ok";
+      readonly offers: readonly PublishedOffer[];
+      readonly writer: `0x${string}`;
+    };
+
+/** Just the offers (one query), for the model listings. */
+export const getArkivOffers = async (): Promise<ArkivOffersRead> => {
+  if (ARKIV_WRITER === null) {
+    return { kind: "off" };
+  }
+  const reader = arkivReader(process.env.ARKIV_ACCESS_KEY?.trim() ?? "");
+  try {
+    const offers = await withTimeout(readOffers(reader, ARKIV_WRITER));
+    return { kind: "ok", offers, writer: ARKIV_WRITER };
+  } catch (error) {
+    return {
+      kind: "error",
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+};

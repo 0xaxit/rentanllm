@@ -1,7 +1,10 @@
+import { entityUrl } from "@rentanllm/arkiv";
+
 import { LocalTime } from "@/components/local-time";
 import { BlockHeading, Note } from "@/components/primitives";
-import { getMarketOffers } from "@/lib/api/queries";
 import type { MarketOffer } from "@/lib/api/types";
+import { getBoard } from "@/lib/board";
+import type { BoardOffer } from "@/lib/board";
 import { cx } from "@/lib/cx";
 import { API_PROXY_PATH } from "@/lib/env";
 import { priceLabel, providerLabel } from "@/lib/market";
@@ -20,7 +23,7 @@ const plural = (count: number, word: string) =>
   `${count} ${word}${count === 1 ? "" : "s"}`;
 
 /** Online first, then the cheapest output price. */
-const byAvailability = (offers: readonly MarketOffer[]): MarketOffer[] =>
+const byAvailability = (offers: readonly BoardOffer[]): BoardOffer[] =>
   offers.toSorted((a, b) => {
     const aOnline = a.nodeStatus === "online" ? 0 : 1;
     const bOnline = b.nodeStatus === "online" ? 0 : 1;
@@ -37,7 +40,7 @@ const COLUMNS = [
   { align: "left", label: "MODEL" },
   { align: "left", label: "PLAN" },
   { align: "left", label: "SELLER" },
-  { align: "left", label: "$ / M TOKENS IN · OUT" },
+  { align: "left", label: "PRICE · PER M TOKENS IN · OUT, OR PER IMAGE" },
   { align: "left", label: "SLOTS" },
   { align: "left", label: "UPTIME 24H" },
   { align: "left", label: "TTFB" },
@@ -83,12 +86,25 @@ const SellerCell = ({ offer }: { offer: MarketOffer }) => (
   </span>
 );
 
-const OfferRow = ({ offer }: { offer: MarketOffer }) => {
+const OfferRow = ({ offer }: { offer: BoardOffer }) => {
   const online = offer.nodeStatus === "online";
+  const model = offer.models.join(", ");
   return (
     <tr className={cx("border-soot border-t", !online && "text-gone")}>
       <td className={cx("py-4 pr-6", online && "text-enamel")}>
-        {offer.models.join(", ")}
+        {offer.arkivEntity === null ? (
+          model
+        ) : (
+          <a
+            className="hover:text-amber underline decoration-dotted underline-offset-4"
+            href={entityUrl(offer.arkivEntity)}
+            rel="noopener noreferrer"
+            target="_blank"
+            title="This offer's entity on the Arkiv explorer"
+          >
+            {model}
+          </a>
+        )}
       </td>
       <td className={cx("py-4 pr-6", online && "text-enamel")}>
         {providerLabel(offer.provider)}
@@ -127,16 +143,21 @@ const OfferRow = ({ offer }: { offer: MarketOffer }) => {
   );
 };
 
+/** "0x7A67…20F8" */
+const shortWriter = (writer: string) =>
+  `${writer.slice(0, 6)}…${writer.slice(-4)}`;
+
 /**
- * The listings a buyer can use right now, read from the market API. Renders nothing
- * when the API cannot be reached, so the landing page never shows an error.
+ * The listings a buyer can use right now, read from the public Arkiv board (the API only
+ * adds uptime, TTFB and agent badges). Renders nothing when neither answers, so the
+ * landing page never shows an error.
  */
 export const AvailableNow = async () => {
-  const offers = await getMarketOffers();
-  if (!offers.ok) {
+  const board = await getBoard();
+  if (board === null) {
     return null;
   }
-  const rows = byAvailability(offers.data);
+  const rows = byAvailability(board.offers);
   const online = rows.filter((offer) => offer.nodeStatus === "online");
   const models = new Set(online.flatMap((offer) => offer.models));
   const asOf = new Date();
@@ -147,9 +168,11 @@ export const AvailableNow = async () => {
     >
       <div className="flex flex-col gap-2">
         <Note tone="mud">
-          prices in USDC · the gateway quotes the cheapest online seller ·
-          uptime and TTFB measured by the platform, posted on chain for ERC-8004
-          agents
+          {board.source === "arkiv" && board.writer !== null
+            ? `read from the public Arkiv board · entities by ${shortWriter(board.writer)} · `
+            : "Arkiv did not answer, so this list comes from the RentAnLLM API · "}
+          prices in USDC · uptime and TTFB measured by the platform, posted on
+          chain for ERC-8004 agents
         </Note>
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
           <BlockHeading

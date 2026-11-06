@@ -2,6 +2,10 @@
 
 ## What users see
 
+- **Homepage, "AVAILABLE NOW", and the Market page's model list:** read from the Arkiv board. Each model name on the homepage links to its entity on the Rabdi explorer. Our API only adds what Arkiv doesn't carry: uptime, TTFB, slots and the ERC-8004 agent badge. If Arkiv doesn't answer within 5 seconds, the lists come from the API and say so.
+  - Code: [`apps/web/lib/board.ts`](../apps/web/lib/board.ts), [`apps/web/lib/arkiv.ts`](../apps/web/lib/arkiv.ts).
+- **Gateway `GET /v1/models` (the OpenAI-compatible route):** the model list agents and SDKs read comes from the Arkiv board, cached for 30 seconds, with `source: "arkiv"`, the writer and each model's entity keys. It falls back to the database when Arkiv is slow.
+  - Code: [`apps/gateway/src/market/models.ts`](../apps/gateway/src/market/models.ts).
 - **Claude Desktop, `list_models`:** the remote MCP server answers "what models can I buy?" from the Arkiv board, not from RentAnLLM's database. It groups offers by model, puts online and cheapest first, and tells the user the list came from Arkiv. It falls back to the gateway only if Arkiv doesn't answer within 5 seconds.
   - Code: [`apps/api/src/mcp/arkiv-board.ts`](../apps/api/src/mcp/arkiv-board.ts), [`apps/api/src/mcp/arkiv-models.ts`](../apps/api/src/mcp/arkiv-models.ts).
 - **For agents and judges:** `bun packages/arkiv/scripts/query.ts [writer] [model]` reads the same data from the command line, with no account.
@@ -17,6 +21,7 @@
   - An offer is only true while its seller is listed, so it lives 15 minutes and is refreshed every 3.
   - A seller that goes away disappears from Arkiv without anyone deleting it.
   - Receipts are history buyers and sellers look back on, so they keep 30 days.
+- **Image models too:** each offer has a `kind`, `chat` or `image`. For an image model, `priceOut` is the price of one image.
 - **One transaction per sync:** `executeBatch` creates, patches, extends and deletes the whole offer set at once. Readers never see half a sync.
 
 ## Query to run

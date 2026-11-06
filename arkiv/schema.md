@@ -11,12 +11,13 @@ One entity per (listing, model) for sale right now.
 | Field | Type | Indexed | Holds |
 | --- | --- | --- | --- |
 | `id` | str | yes | `${listing}:${model}`, unique per offer |
+| `kind` | str | yes | `chat` or `image`; entities written before it read as `chat` |
 | `listing` | str | yes | The seller's listing id |
-| `model` | str | yes | Ollama model name, e.g. `llama3.1:8b` |
+| `model` | str | yes | Model name, e.g. `llama3.1:8b` or `flux-2-klein-4b` |
 | `network` | str | yes | CAIP-2 network buyers pay on, e.g. `hedera:testnet` |
 | `online` | bool | yes | Whether the seller's node was connected at the last sync |
 | `priceIn` | u64 | yes | Micro-USDC per million input tokens |
-| `priceOut` | u64 | yes | Micro-USDC per million output tokens |
+| `priceOut` | u64 | yes | Micro-USDC per million output tokens; for an image model, per image |
 | `payTo` | str | no | Who the payment goes to (Hedera `0.0.x` account or EVM address) |
 | `url` | str | no | The gateway endpoint to send the request to |
 

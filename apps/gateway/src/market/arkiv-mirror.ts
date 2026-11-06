@@ -8,11 +8,20 @@ import {
   arkivReader,
   arkivWriter,
   publishReceipt,
+  readOffers,
   syncOffers,
   writerAddress,
 } from "@rentanllm/arkiv";
-import type { Offer, Receipt } from "@rentanllm/arkiv";
-import { Context, Duration, Effect, Layer, Redacted, Schedule } from "effect";
+import type { Offer, PublishedOffer, Receipt } from "@rentanllm/arkiv";
+import {
+  Context,
+  Duration,
+  Effect,
+  Layer,
+  Redacted,
+  Ref,
+  Schedule,
+} from "effect";
 
 import { Settings } from "../config.ts";
 import type { ArkivSettings } from "../config.ts";
@@ -22,16 +31,29 @@ import { MarketTerms } from "./terms.ts";
 
 /** Any positive amount: the terms are only read for their network and payee. */
 const PROBE_AMOUNT = 1n;
+/** /v1/models reads the board at most this often; offers are re-published every 3 minutes. */
+const BOARD_CACHE_MS = 30_000;
+/** A slow Arkiv RPC must not hold up /v1/models; it falls back to the database. */
+const BOARD_READ_TIMEOUT = Duration.seconds(5);
+
+/** The offers on the public Arkiv board, as the gateway's own writer published them. */
+export interface ArkivBoard {
+  readonly offers: readonly PublishedOffer[];
+  readonly writer: string;
+}
 
 export class ArkivMirror extends Context.Service<
   ArkivMirror,
   {
+    /** The board read back from Arkiv (cached briefly); null when Arkiv is off or slow. */
+    readonly board: Effect.Effect<ArkivBoard | null>;
     /** Publishes a paid request's receipt in the background. Never fails. */
     readonly receipt: (receipt: Receipt) => Effect.Effect<void>;
   }
 >()("@rentanllm/gateway/ArkivMirror") {}
 
 const ArkivMirrorOff = Layer.succeed(ArkivMirror)({
+  board: Effect.succeed(null),
   receipt: () => Effect.void,
 });
 
@@ -98,7 +120,32 @@ const makeMirror = (arkiv: ArkivSettings, resourceUrl: string) =>
         Effect.repeat(Schedule.spaced(Duration.millis(arkiv.syncIntervalMs)))
       )
     );
+    const address = writerAddress(key);
+    const cached = yield* Ref.make<{
+      readonly at: number;
+      readonly board: ArkivBoard;
+    } | null>(null);
+    const board = Effect.gen(function* readBoard() {
+      const hit = yield* Ref.get(cached);
+      const now = Date.now();
+      if (hit !== null && now - hit.at < BOARD_CACHE_MS) {
+        return hit.board;
+      }
+      const offers = yield* Effect.tryPromise(() =>
+        readOffers(reader, address)
+      ).pipe(Effect.timeout(BOARD_READ_TIMEOUT));
+      const fresh = { offers, writer: address };
+      yield* Ref.set(cached, { at: now, board: fresh });
+      return fresh;
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("arkiv board read failed", cause).pipe(
+          Effect.as(null)
+        )
+      )
+    );
     return {
+      board,
       receipt: (receipt: Receipt) =>
         Effect.tryPromise(() => publishReceipt(writer, receipt)).pipe(
           Effect.tap(({ key: entityKey }) =>

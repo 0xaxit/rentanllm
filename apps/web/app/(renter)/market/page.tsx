@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 
-import { ApiErrorState } from "@/components/api-error";
 import { GroupedList, GroupedRow } from "@/components/app-shell/grouped-list";
 import { AppMain, PageHeader } from "@/components/app-shell/page-header";
 import { CopyButton } from "@/components/copy-button";
@@ -9,8 +8,9 @@ import { UseTabs } from "@/components/market/use-tabs";
 import type { UseMode } from "@/components/market/use-tabs";
 import { BlockHeading, Callout, Note } from "@/components/primitives";
 import { SignInButton } from "@/components/wallet/sign-in-button";
-import { getAgentWallet, getMarketOffers } from "@/lib/api/queries";
+import { getAgentWallet } from "@/lib/api/queries";
 import type { AgentWallet } from "@/lib/api/types";
+import { getBoard } from "@/lib/board";
 import { GATEWAY_API_BASE, GATEWAY_URL, MCP_URL } from "@/lib/env";
 import { marketModels } from "@/lib/market";
 import { formatPrice } from "@/lib/money";
@@ -216,15 +216,15 @@ const MarketPage = async ({
 }: {
   searchParams: Promise<{ use?: string | string[] }>;
 }) => {
-  const [{ use }, offers, walletResult] = await Promise.all([
+  const [{ use }, board, walletResult] = await Promise.all([
     searchParams,
-    getMarketOffers(),
+    getBoard(),
     getAgentWallet(),
   ]);
   const wallet: WalletState = walletResult.ok
     ? walletResult.data
     : "signed-out";
-  const models = offers.ok ? marketModels(offers.data) : [];
+  const models = board === null ? [] : marketModels(board.offers);
   const example = models.find((row) => row.online > 0)?.model ?? "llama3.1:8b";
   return (
     <AppMain>
@@ -239,9 +239,20 @@ const MarketPage = async ({
         </Note>
         <BlockHeading lines={["FOR SALE NOW"]} tone="ash" />
       </div>
-      {offers.ok ? (
+      {board === null ? (
+        <Callout rule="amber">
+          <p className="text-body text-enamel leading-5.75">
+            Neither the Arkiv board nor the RentAnLLM API answered. Try again in
+            a minute.
+          </p>
+        </Callout>
+      ) : (
         <GroupedList
-          footer="the gateway quotes the cheapest online sellers in every 402"
+          footer={
+            board.source === "arkiv"
+              ? "read from the public Arkiv board · the gateway quotes the cheapest online sellers in every 402"
+              : "Arkiv did not answer, so this list comes from the RentAnLLM API"
+          }
           title="MODELS"
         >
           {models.map((row) => (
@@ -264,11 +275,6 @@ const MarketPage = async ({
             />
           )}
         </GroupedList>
-      ) : (
-        <ApiErrorState
-          error={offers.error}
-          signedOut={{ body: "", title: "Sign in" }}
-        />
       )}
       <UseTabs
         api={<ApiPanel example={example} />}
