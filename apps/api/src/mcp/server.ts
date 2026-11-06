@@ -5,6 +5,7 @@
  * Claude asks the person before each write tool (buy_inference), as for any connector.
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { PublishedOffer } from "@rentanllm/arkiv";
 import {
   formatUsdc,
   listModels,
@@ -18,11 +19,36 @@ import {
 import type { ChatMessage, ChatRequest } from "@rentanllm/mcp/remote";
 import { z } from "zod";
 
+import { arkivModelsShape, modelsFromOffers, modelsText } from "./arkiv-models";
+import type { ArkivModels } from "./arkiv-models";
+
 const NETWORK = "hedera:testnet";
 const DEFAULT_MAX_TOKENS = 512;
 const MAX_TOKENS_LIMIT = 32_768;
 
+/** The gateway's own list, used when Arkiv does not answer. */
+const gatewayModels = async (gatewayUrl: string): Promise<ArkivModels> => {
+  const models = await listModels(gatewayUrl);
+  return {
+    models: models.map((m) => ({
+      cheapest_input_usdc_per_mtok: m.cheapest_input_usdc_per_mtok,
+      cheapest_output_usdc_per_mtok: m.cheapest_output_usdc_per_mtok,
+      model: m.id,
+      offers: [],
+      sellers: m.sellers,
+      sellers_online: m.sellers_online,
+    })),
+    source: "gateway",
+    writer: null,
+  };
+};
+
 export interface McpContext {
+  /** The gateway's offers on Arkiv; null when Arkiv is off or did not answer in time. */
+  readonly arkivOffers: () => Promise<{
+    readonly offers: readonly PublishedOffer[];
+    readonly writer: string;
+  } | null>;
   /** The user's agent wallet balance in micro-USDC, or null when unknown. */
   readonly balance: (accountId: string) => Promise<bigint | null>;
   readonly gatewayUrl: string;
@@ -171,7 +197,7 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
     },
     {
       instructions:
-        "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models, then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. agent_wallet shows the balance and recent payments. When you show a buy_inference result, show the exact prompt that was sent and the model's answer verbatim (in a quote or code block), then one payment line with the HashScan link. Do not summarize, grade or comment on the answer unless the user asks.",
+        "RentAnLLM sells open-model inference from people's own machines, paid per request in USDC on Hedera testnet. Use list_models (it reads the public Arkiv board), then quote_inference to see a price, then buy_inference to pay the seller from the user's agent wallet and get the answer. agent_wallet shows the balance and recent payments. When you show a buy_inference result, show the exact prompt that was sent and the model's answer verbatim (in a quote or code block), then one payment line with the HashScan link. Do not summarize, grade or comment on the answer unless the user asks.",
     }
   );
 
@@ -180,23 +206,25 @@ export const buildMcpServer = (ctx: McpContext): McpServer => {
     {
       annotations: { openWorldHint: true, readOnlyHint: true },
       description:
-        "Open models for sale on RentAnLLM right now: sellers online and the cheapest prices per million tokens.",
+        "Open models for sale on RentAnLLM right now, read from the public Arkiv board (not RentAnLLM's API): sellers online, the cheapest prices per million tokens, and each offer's Arkiv entity. Prices to pay come from quote_inference.",
+      outputSchema: arkivModelsShape,
       title: "List models",
     },
     async () => {
       try {
-        const models = await listModels(ctx.gatewayUrl);
-        if (models.length === 0) {
-          return text("Nothing is for sale right now.");
-        }
-        return text(
-          models
-            .map(
-              (m) =>
-                `${m.id}: ${m.sellers_online} of ${m.sellers} sellers online, from ${m.cheapest_input_usdc_per_mtok ?? "?"} in / ${m.cheapest_output_usdc_per_mtok ?? "?"} out USDC per M tokens`
-            )
-            .join("\n")
-        );
+        const board = await ctx.arkivOffers();
+        const result: ArkivModels =
+          board === null
+            ? await gatewayModels(ctx.gatewayUrl)
+            : {
+                models: modelsFromOffers(board.offers),
+                source: "arkiv",
+                writer: board.writer,
+              };
+        return {
+          content: [{ text: modelsText(result), type: "text" as const }],
+          structuredContent: result,
+        };
       } catch (error) {
         return failure(explain(error));
       }

@@ -15,6 +15,7 @@
     "@hashgraph/sdk": "2.81.0",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@rentanllm/api-contract": "workspace:*",
+    "@rentanllm/arkiv": "workspace:*",
     "@rentanllm/core": "workspace:*",
     "@rentanllm/db": "workspace:*",
     "@rentanllm/mcp": "workspace:*",

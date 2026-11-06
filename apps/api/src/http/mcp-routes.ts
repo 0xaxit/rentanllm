@@ -21,6 +21,7 @@ import { currentDate } from "../clock";
 import { ApiConfig } from "../config";
 import type { AgentWalletChain } from "../hedera/agent-wallets";
 import { HederaMirror } from "../hedera/mirror";
+import { arkivBoardReader } from "../mcp/arkiv-board";
 import { buildMcpServer } from "../mcp/server";
 import { agentWalletSigner } from "../services/agent-wallet";
 import type { OAuthFailure } from "../services/oauth";
@@ -143,6 +144,8 @@ const runner =
   <A>(effect: Effect.Effect<A, never, Services>): Promise<A> =>
     Effect.runPromise(Effect.provideContext(effect, services));
 
+const arkivBoard = arkivBoardReader();
+
 const mcp = Effect.gen(function* mcpGen() {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const config = yield* ApiConfig;
@@ -164,6 +167,7 @@ const mcp = Effect.gen(function* mcpGen() {
   }
   const run = runner(yield* Effect.context<Services>());
   const server = buildMcpServer({
+    arkivOffers: arkivBoard,
     balance: (accountId) =>
       run(
         Effect.flatMap(Effect.service(HederaMirror), (m) =>
